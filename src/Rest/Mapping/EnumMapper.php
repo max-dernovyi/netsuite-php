@@ -9,7 +9,7 @@
 namespace NetSuite\Rest\Mapping;
 
 /**
- * SOAP enum values → REST values for the enums REST spells differently; other values pass through unchanged.
+ * SOAP enum values ↔ REST values for the enums REST spells differently; other values pass through unchanged.
  */
 final class EnumMapper
 {
@@ -111,12 +111,32 @@ final class EnumMapper
         'salesorderorderstatus' => self::SALES_ORDER_ORDER_STATUS,
     ];
 
+    /** @var array<string, array<string, string>> */
+    private static $reverse = [];
+
     /**
      * @param string $enum the generated enum class (short or fully qualified name)
      */
     public function toRest(string $enum, string $value): string
     {
-        $key = strtolower(substr($enum, (int) strrpos('\\'.$enum, '\\')));
+        $key = self::key($enum);
         return isset(self::MAPS[$key][$value]) ? self::MAPS[$key][$value] : $value;
+    }
+
+    /**
+     * @param string $enum the generated enum class (short or fully qualified name)
+     */
+    public function fromRest(string $enum, string $value): string
+    {
+        $key = self::key($enum);
+        if (!isset(self::$reverse[$key])) {
+            self::$reverse[$key] = isset(self::MAPS[$key]) ? array_flip(self::MAPS[$key]) : [];
+        }
+        return isset(self::$reverse[$key][$value]) ? self::$reverse[$key][$value] : $value;
+    }
+
+    private static function key(string $enum): string
+    {
+        return strtolower(substr($enum, (int) strrpos('\\'.$enum, '\\')));
     }
 }

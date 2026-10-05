@@ -57,6 +57,25 @@ class EnumMapperTest extends TestCase
         $this->assertSame('_english', $mapper->toRest('Language', '_english'));
     }
 
+    public function testFromRestReversesTheMaps()
+    {
+        $mapper = new EnumMapper();
+        foreach (['Country' => EnumMapper::COUNTRY, 'SalesOrderOrderStatus' => EnumMapper::SALES_ORDER_ORDER_STATUS] as $enum => $map) {
+            foreach ($map as $value => $code) {
+                $this->assertSame($value, $mapper->fromRest($enum, $code));
+            }
+        }
+        $this->assertSame(Country::_unitedStates, $mapper->fromRest('NetSuite\\Classes\\Country', 'US'));
+    }
+
+    public function testFromRestPassesUnknownValuesThrough()
+    {
+        $mapper = new EnumMapper();
+        $this->assertSame('ZZ', $mapper->fromRest('Country', 'ZZ'));
+        $this->assertSame('US', $mapper->fromRest('Language', 'US'));
+        $this->assertSame('_pDF', $mapper->fromRest('EmailPreference', '_pDF'));
+    }
+
     private function assertMatchesPattern(string $pattern, string $value)
     {
         $this->assertSame(1, preg_match($pattern, $value), $value);

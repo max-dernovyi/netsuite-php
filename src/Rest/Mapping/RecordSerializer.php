@@ -24,7 +24,7 @@ use NetSuite\Rest\Exception\NotSupportedOnRestException;
  */
 final class RecordSerializer
 {
-    const CLASS_PREFIX = 'NetSuite\\Classes\\';
+    const CLASS_PREFIX = TypeMap::CLASS_PREFIX;
     const ISO_8601 = 'Y-m-d\TH:i:sP';
     const DATE_PATTERN = '/^\d{4}-\d{2}-\d{2}$/';
     const DATE_TIME_PATTERN = '/^\d{4}-\d{2}-\d{2}T/';
@@ -33,13 +33,6 @@ final class RecordSerializer
     private $names;
     /** @var EnumMapper */
     private $enums;
-
-    /** @var array<string, array<string, string>> class → field → type */
-    private static $types = [];
-    /** @var array<string, array{0: string, 1: bool}|null> type → [item property, has replaceAll] */
-    private static $lists = [];
-    /** @var array<string, bool> */
-    private static $enumTypes = [];
 
     public function __construct(?FieldNameMap $names = null, ?EnumMapper $enums = null)
     {
@@ -71,7 +64,7 @@ final class RecordSerializer
         $shortClass = substr($class, strrpos('\\'.$class, '\\'));
         $body = [];
         $nulls = null;
-        foreach ($this->types($class) as $field => $type) {
+        foreach (TypeMap::fields($class) as $field => $type) {
             if (!isset($object->$field) || ($replace !== null && $field === 'internalId')) {
                 continue;
             }
@@ -81,10 +74,10 @@ final class RecordSerializer
                 $nulls = $value;
             } elseif ($type === 'CustomFieldList') {
                 $body = array_merge($body, $this->customFields($value, $path));
-            } elseif ($this->listShape($type) !== null) {
-                $name = $this->names->toRest($class, $field, $this->listShape($type)[1]);
+            } elseif (TypeMap::listShape($type) !== null) {
+                $name = $this->names->toRest($class, $field, TypeMap::listShape($type)[1]);
                 $body[$name] = $this->serializeList($type, $value, $path);
-                if ($replace !== null && $this->listShape($type)[1] && ($value->replaceAll === null
+                if ($replace !== null && TypeMap::listShape($type)[1] && ($value->replaceAll === null
                     || filter_var($value->replaceAll, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true)) {
                     $replace[] = $name;
                 }
@@ -97,8 +90,8 @@ final class RecordSerializer
         }
         if (is_object($nulls) && isset($nulls->name)) {
             foreach ($this->wrap($nulls->name) as $field) {
-                $type = isset($this->types($class)[$field]) ? $this->types($class)[$field] : null;
-                $isSublist = $type !== null && $this->listShape($type) !== null && $this->listShape($type)[1];
+                $type = isset(TypeMap::fields($class)[$field]) ? TypeMap::fields($class)[$field] : null;
+                $isSublist = $type !== null && TypeMap::listShape($type) !== null && TypeMap::listShape($type)[1];
                 $body[$this->names->toRest($class, (string) $field, $isSublist)] = null;
             }
         }
@@ -141,7 +134,7 @@ final class RecordSerializer
             $body = $this->serializeObject($value);
             return $body === [] ? null : $body;
         }
-        if (is_string($value) && $this->isEnum($type)) {
+        if (is_string($value) && TypeMap::isEnum($type)) {
             return ['id' => $this->enums->toRest($type, $value)];
         }
         return $this->mismatch($type, $value, $path);
@@ -152,8 +145,8 @@ final class RecordSerializer
         if (!is_object($list)) {
             return $this->mismatch($type, $list, $path);
         }
-        $property = $this->listShape($type)[0];
-        $itemType = $this->types(self::CLASS_PREFIX.$type)[$property];
+        $property = TypeMap::listShape($type)[0];
+        $itemType = TypeMap::fields(self::CLASS_PREFIX.$type)[$property];
         return ['items' => isset($list->$property) ? $this->value($itemType, $list->$property, $path) : []];
     }
 
@@ -165,7 +158,7 @@ final class RecordSerializer
                 $this->mismatch('CustomFieldRef', $field, $path);
             }
             $id = $this->customFieldId($field);
-            $types = $this->types(get_class($field));
+            $types = TypeMap::fields(get_class($field));
             if (!isset($field->value, $types['value'])) {
                 continue;
             }
@@ -222,57 +215,6 @@ final class RecordSerializer
             }
         }
         return $this->mismatch('dateTime', $value, $path);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function types(string $class): array
-    {
-        if (!isset(self::$types[$class])) {
-            $map = [];
-            for ($c = $class; $c !== false; $c = get_parent_class($c)) {
-                if (property_exists($c, 'paramtypesmap')) {
-                    $map += $c::$paramtypesmap;
-                }
-            }
-            self::$types[$class] = $map;
-        }
-        return self::$types[$class];
-    }
-
-    /**
-     * A list class has one array property, optionally next to `replaceAll`.
-     *
-     * @return array{0: string, 1: bool}|null [item property, has replaceAll]
-     */
-    private function listShape(string $type): ?array
-    {
-        if (!array_key_exists($type, self::$lists)) {
-            self::$lists[$type] = null;
-            $class = self::CLASS_PREFIX.$type;
-            if (!in_array($type, ['CustomFieldList', 'NullField'], true) && class_exists($class)) {
-                $types = $this->types($class);
-                $arrays = array_keys(array_filter($types, function ($t) {
-                    return substr($t, -2) === '[]';
-                }));
-                $others = array_diff(array_keys($types), $arrays);
-                if (count($arrays) === 1 && array_diff($others, ['replaceAll']) === []) {
-                    self::$lists[$type] = [$arrays[0], $others !== []];
-                }
-            }
-        }
-        return self::$lists[$type];
-    }
-
-    private function isEnum(string $type): bool
-    {
-        if (!isset(self::$enumTypes[$type])) {
-            $class = self::CLASS_PREFIX.$type;
-            self::$enumTypes[$type] = class_exists($class) && $this->types($class) === []
-                && (new \ReflectionClass($class))->getConstants() !== [];
-        }
-        return self::$enumTypes[$type];
     }
 
     private function wrap($value): array

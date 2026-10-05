@@ -1,0 +1,69 @@
+{
+  "links": [{"rel": "self", "href": "https://123456.suitetalk.api.netsuite.com/services/rest/record/v1/customer/107"}],
+  "addressBook": {
+    "links": [{"rel": "self", "href": "https://123456.suitetalk.api.netsuite.com/services/rest/record/v1/customer/107/addressBook"}],
+    "items": [
+      {
+        "links": [{"rel": "self", "href": "https://123456.suitetalk.api.netsuite.com/services/rest/record/v1/customer/107/addressBook/9"}],
+        "addressBookAddress": {
+          "links": [{"rel": "self", "href": "https://123456.suitetalk.api.netsuite.com/services/rest/record/v1/customer/107/addressBook/9/addressBookAddress"}],
+          "addr1": "2955 Campus Drive",
+          "addressee": "Acme Inc.",
+          "addrText": "Acme Inc.<br>2955 Campus Drive<br>San Mateo CA 94403<br>United States",
+          "city": "San Mateo",
+          "country": {"id": "US", "refName": "United States"},
+          "override": false,
+          "state": "CA",
+          "zip": "94403"
+        },
+        "addressId": "9",
+        "defaultBilling": true,
+        "defaultShipping": true,
+        "id": 9,
+        "internalId": 9,
+        "isResidential": false,
+        "label": "HQ"
+      }
+    ],
+    "totalResults": 1
+  },
+  "balance": 1250.5,
+  "companyName": "Acme Inc.",
+  "creditLimit": 5000,
+  "currency": {"links": [], "id": "1", "refName": "USA"},
+  "currencyList": {
+    "links": [],
+    "items": [
+      {"links": [], "balance": 1250.5, "currency": {"links": [], "id": "1", "refName": "USA"}, "overdueBalance": 0}
+    ],
+    "totalResults": 1
+  },
+  "custentity_flag": true,
+  "custentity_count": 7,
+  "custentity_ratio": 0.5,
+  "custentity_since": "2026-03-04",
+  "custentity_text": "hello",
+  "custentity_tier": {"links": [], "id": "3", "refName": "Gold"},
+  "custentity_tags": {
+    "links": [],
+    "items": [{"id": "1", "refName": "Retail"}, {"id": "2", "refName": "Wholesale"}],
+    "totalResults": 2
+  },
+  "custentity_cleared": null,
+  "customForm": {"id": "-2", "refName": "Standard Customer Form"},
+  "dateCreated": "2026-01-02T17:15:30Z",
+  "daysOverdue": 3,
+  "email": "billing@acme.example",
+  "emailPreference": {"id": "_pDF", "refName": "PDF"},
+  "entityId": "Acme Inc.",
+  "entityStatus": {"links": [], "id": "13", "refName": "CUSTOMER-Closed Won"},
+  "externalId": "CUST_107",
+  "id": "107",
+  "isInactive": false,
+  "isPerson": false,
+  "lastModifiedDate": "2026-09-30T08:00:00Z",
+  "phone": "650-555-0100",
+  "subsidiary": {"links": [], "id": "1", "refName": "Honeycomb Mfg."},
+  "terms": {"links": [], "id": "2", "refName": "Net 30"},
+  "unknownRestOnlyField": "dropped"
+}

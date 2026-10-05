@@ -9,7 +9,8 @@
 namespace NetSuite\Rest\Mapping;
 
 /**
- * SOAP → REST field names. Lookup order: per-class override, global rename, `List` suffix stripped from sublists.
+ * SOAP → REST field names. Lookup order: per-class override, global rename, `List` suffix stripped from sublists
+ * unless the stripped name is another field of the class (`Customer.currency` vs `currencyList`).
  */
 final class FieldNameMap
 {
@@ -44,7 +45,9 @@ final class FieldNameMap
             return self::GLOBAL_RENAMES[$soapName];
         }
         if ($isSublist && strlen($soapName) > 4 && substr($soapName, -4) === 'List') {
-            return substr($soapName, 0, -4);
+            $stripped = substr($soapName, 0, -4);
+            $fqcn = strpos($class, '\\') === false ? TypeMap::CLASS_PREFIX.$class : ltrim($class, '\\');
+            return class_exists($fqcn) && isset(TypeMap::fields($fqcn)[$stripped]) ? $soapName : $stripped;
         }
         return $soapName;
     }

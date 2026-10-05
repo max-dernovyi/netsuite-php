@@ -3,6 +3,7 @@
 namespace tests\Netsuite\Rest\Mapping;
 
 use NetSuite\Classes\Customer;
+use NetSuite\Classes\Task;
 use NetSuite\Rest\Mapping\FieldNameMap;
 use PHPUnit\Framework\TestCase;
 
@@ -35,6 +36,15 @@ class FieldNameMapTest extends TestCase
         $map = new FieldNameMap(['customer' => ['currencyList' => 'currencies', 'addressbookList' => 'addresses']]);
         $this->assertSame('currencies', $map->toRest(Customer::class, 'currencyList', true));
         $this->assertSame('addresses', $map->toRest('Customer', 'addressbookList', true));
-        $this->assertSame('currency', $map->toRest('Vendor', 'currencyList', true));
+        $this->assertSame('currencyList', $map->toRest('Vendor', 'currencyList', true));
+    }
+
+    public function testSuffixIsKeptWhenTheStrippedNameIsAnotherField()
+    {
+        $map = new FieldNameMap();
+        $this->assertSame('currencyList', $map->toRest('Customer', 'currencyList', true));
+        $this->assertSame('contactList', $map->toRest(Task::class, 'contactList', true));
+        $this->assertSame('directDepositList', $map->toRest('Employee', 'directDepositList', true));
+        $this->assertSame('item', $map->toRest('NoSuchClass', 'itemList', true));
     }
 }
