@@ -9,6 +9,7 @@ use NetSuite\Classes\SearchResponse;
 use NetSuite\NetSuiteClient;
 use NetSuite\NetSuiteService;
 use NetSuite\Rest\Exception\NotSupportedOnRestException;
+use NetSuite\Rest\Handler\HandlerFactory;
 use NetSuite\Rest\Http\RestClient;
 use NetSuite\Rest\Http\Response;
 use NetSuite\Rest\LastCall;
@@ -264,16 +265,20 @@ class NetSuiteClientRestTest extends TestCase
         return $cases;
     }
 
-    public function testDefaultHandlersSendEveryOperationToTheFallback()
+    public function testDefaultHandlersSendEveryOtherOperationToTheFallback()
     {
+        $restOperations = ['get', 'getList'];
+        $fallbacks = array_values(array_diff(OperationCatalogTest::serviceOperations(), $restOperations));
         $soap = $this->soap();
-        $soap->expects($this->exactly(42))->method('__soapCall')->willReturn('soap');
+        $soap->expects($this->exactly(count($fallbacks)))->method('__soapCall')->willReturn('soap');
         $service = new NetSuiteService($this->config(), [], $soap, $this->logger);
 
-        foreach (OperationCatalogTest::serviceOperations() as $operation) {
+        foreach ($fallbacks as $operation) {
             $this->assertSame('soap', $service->$operation($this->requestFor($operation)));
         }
-        $this->assertCount(42, $this->logger->records);
+        $this->assertCount(count($fallbacks), $this->logger->records);
+        $this->assertSame($restOperations, array_keys(HandlerFactory::create(function () {
+        })));
     }
 
     private function requestFor(string $operation)

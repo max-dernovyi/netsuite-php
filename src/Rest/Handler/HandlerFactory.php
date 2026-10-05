@@ -9,6 +9,7 @@
 namespace NetSuite\Rest\Handler;
 
 use NetSuite\Rest\Http\RestClient;
+use NetSuite\Rest\Record\RecordClient;
 
 final class HandlerFactory
 {
@@ -18,6 +19,19 @@ final class HandlerFactory
      */
     public static function create(callable $restClient): array
     {
-        return [];
+        $get = null;
+        $getHandler = function () use ($restClient, &$get) {
+            if ($get === null) {
+                $get = new GetHandler(new RecordClient(call_user_func($restClient)));
+            }
+            return $get;
+        };
+
+        return [
+            'get'     => $getHandler,
+            'getList' => function () use ($getHandler) {
+                return new GetListHandler($getHandler());
+            },
+        ];
     }
 }
