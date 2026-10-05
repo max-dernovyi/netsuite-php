@@ -10,6 +10,7 @@ namespace tests\Netsuite;
 
 use NetSuite\Classes\GetRequest;
 use NetSuite\Classes\GetResponse;
+use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\SearchRequest;
 use NetSuite\Classes\SearchResponse;
 use NetSuite\NetSuiteClient;
@@ -50,7 +51,7 @@ class NetSuiteClientRestTest extends TestCase
         ], $overrides);
     }
 
-    private function service(array $config, ?\SoapClient $soap = null, array $handlers = []): TestNetSuiteService
+    private function service(array $config, ?\SoapClient $soap = null, ?array $handlers = []): TestNetSuiteService
     {
         $service = new TestNetSuiteService($config, [], $soap, $this->logger);
         $service->handlers = $handlers;
@@ -123,6 +124,21 @@ class NetSuiteClientRestTest extends TestCase
 
         $this->assertSame('2025_2', $values['endpoint']);
         $this->assertSame('https://123456-sb1.suitetalk.api.netsuite.com', $values['host']);
+    }
+
+    public function testFallbackKeepsUserSoapSettingsAndSignsWithTheRealm()
+    {
+        $service = $this->service($this->config([
+            'account'  => '123456-sb1',
+            'endpoint' => '2024_1',
+            'host'     => 'https://custom.example.test',
+        ]));
+
+        $values = $this->privateOf($service, 'config');
+
+        $this->assertSame('123456_SB1', $values['account']);
+        $this->assertSame('2024_1', $values['endpoint']);
+        $this->assertSame('https://custom.example.test', $values['host']);
     }
 
     public function testOAuth2OnlyConfigCannotFallBack()
@@ -269,6 +285,61 @@ class NetSuiteClientRestTest extends TestCase
             $cases[$operation.' via fallback'] = [$operation, false];
         }
         return $cases;
+    }
+
+    public function testOAuth2ConfigFetchesATokenAndSendsItAsBearer()
+    {
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($key, $pem);
+        $service = $this->service([
+            'transport'           => 'rest',
+            'account'             => '123456_SB1',
+            'oauth2ClientId'      => 'client-id',
+            'oauth2CertificateId' => 'cert-id',
+            'oauth2PrivateKey'    => $pem,
+            'oauth2Algorithm'     => 'ES256',
+            'restBaseUrl'         => 'https://rest.example.test/services/rest',
+        ], null, null);
+        $service->transport = new FakeTransport([
+            new Response(200, [], '{"access_token":"tok-1","expires_in":3600}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"id":"7"}'),
+        ]);
+        $request = new GetRequest();
+        $request->baseRef = new RecordRef();
+        $request->baseRef->type = 'customer';
+        $request->baseRef->internalId = '7';
+
+        $this->assertTrue($service->get($request)->readResponse->status->isSuccess);
+        $requests = $service->transport->requests;
+        $this->assertCount(2, $requests);
+        $this->assertStringEndsWith('/auth/oauth2/v1/token', $requests[0]->getUrl());
+        $this->assertSame('Bearer tok-1', $requests[1]->getHeader('Authorization'));
+    }
+
+    public function testLogRequestsTogglesRestLogging()
+    {
+        $service = $this->service($this->config(), null, null);
+        $service->transport = new FakeTransport([
+            new Response(200, ['Content-Type' => 'application/json'], '{"id":"7"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"id":"7"}'),
+            new Response(200, ['Content-Type' => 'application/json'], '{"id":"7"}'),
+        ]);
+        $request = new GetRequest();
+        $request->baseRef = new RecordRef();
+        $request->baseRef->type = 'customer';
+        $request->baseRef->internalId = '7';
+
+        $service->get($request);
+        $this->assertSame([], $this->logger->records);
+
+        $service->logRequests(true);
+        $service->get($request);
+        $this->assertCount(1, $this->logger->records);
+        $this->assertSame('rest', $this->logger->records[0]['context']['operation']);
+
+        $service->logRequests(false);
+        $service->get($request);
+        $this->assertCount(1, $this->logger->records);
     }
 
     public function testDefaultHandlersSendEveryOtherOperationToTheFallback()

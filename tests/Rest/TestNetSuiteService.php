@@ -18,13 +18,16 @@ use tests\Netsuite\Rest\Http\FakeTransport;
  */
 class TestNetSuiteService extends NetSuiteService
 {
-    /** @var array<string, callable(callable): object> operation => fn($restClient) returning a handler */
+    /** @var array<string, callable(callable): object>|null operation => fn($restClient) returning a handler; null for the real ones */
     public $handlers = [];
     /** @var TransportInterface */
     public $transport;
 
     protected function createRestHandlers(callable $restClient): array
     {
+        if ($this->handlers === null) {
+            return parent::createRestHandlers($restClient);
+        }
         $factories = [];
         foreach ($this->handlers as $operation => $make) {
             $factories[$operation] = function () use ($make, $restClient) {

@@ -314,6 +314,61 @@ class GetHandlerTest extends TestCase
         }, $this->requests()));
     }
 
+    public function testGetListTurnsFaultsAfterTheFirstItemIntoStatuses()
+    {
+        $this->transport->push($this->record('customer'));
+        $this->transport->push(new Response(500, [], '{"title":"Internal Server Error","status":500}'));
+        $this->transport->push($this->json('{"id":"31","itemId":"WIDGET"}'));
+        $typeIdOnly = new CustomRecordRef();
+        $typeIdOnly->internalId = '9';
+        $typeIdOnly->typeId = '314';
+        $request = new GetListRequest();
+        $request->baseRef = [
+            $this->ref(RecordType::customer, '107'),
+            $this->ref(RecordType::customer, '108'),
+            $typeIdOnly,
+            $this->ref(RecordType::inventoryItem, '31'),
+        ];
+
+        $list = (new GetListHandler($this->get))->handle($request)->readResponseList;
+
+        $this->assertInstanceOf(Customer::class, $list->readResponse[0]->record);
+        $this->assertFailure($list->readResponse[1], StatusDetailCodeType::UNEXPECTED_ERROR, 'HTTP 500');
+        $this->assertFailure($list->readResponse[2], StatusDetailCodeType::USER_ERROR);
+        $this->assertInstanceOf(InventoryItem::class, $list->readResponse[3]->record);
+        $this->assertCount(3, $this->requests());
+    }
+
+    public function testGetListThrowsAFaultOnTheFirstItem()
+    {
+        $this->transport->push(new Response(500, [], '{"title":"Internal Server Error","status":500}'));
+        $request = new GetListRequest();
+        $request->baseRef = [$this->ref(RecordType::customer, '107'), $this->ref(RecordType::customer, '108')];
+
+        try {
+            (new GetListHandler($this->get))->handle($request);
+            $this->fail('RestFault expected');
+        } catch (RestFault $fault) {
+            $this->assertCount(1, $this->requests());
+        }
+    }
+
+    public function testGetListTurnsAnUnsupportedFirstItemIntoAStatus()
+    {
+        $this->transport->push($this->record('customer'));
+        $request = new GetListRequest();
+        $typeIdOnly = new CustomRecordRef();
+        $typeIdOnly->internalId = '9';
+        $typeIdOnly->typeId = '314';
+        $request->baseRef = [$typeIdOnly, $this->ref(RecordType::customer, '107')];
+
+        $list = (new GetListHandler($this->get))->handle($request)->readResponseList;
+
+        $this->assertFailure($list->readResponse[0], StatusDetailCodeType::USER_ERROR);
+        $this->assertInstanceOf(Customer::class, $list->readResponse[1]->record);
+        $this->assertCount(1, $this->requests());
+    }
+
     /**
      * @dataProvider emptyListProvider
      */

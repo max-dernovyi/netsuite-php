@@ -41,8 +41,7 @@ class RestConfigTest extends TestCase
         $config = $this->tbaConfig();
         unset($config['transport']);
 
-        $this->assertSame('soap', RestConfig::fromArray($config)->transport());
-        $this->assertFalse(RestConfig::fromArray($config)->isRest());
+        $this->assertSame('soap', RestConfig::transportOf($config));
         $this->assertSame('soap', RestConfig::transportOf(['transport' => '']));
     }
 
@@ -51,7 +50,9 @@ class RestConfigTest extends TestCase
      */
     public function testTransportValues($value, string $expected)
     {
-        $this->assertSame($expected, RestConfig::fromArray($this->tbaConfig(['transport' => $value]))->transport());
+        $config = $this->tbaConfig(['transport' => $value]);
+        RestConfig::fromArray($config);
+        $this->assertSame($expected, RestConfig::transportOf($config));
     }
 
     public static function transportProvider(): array

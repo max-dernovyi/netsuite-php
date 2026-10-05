@@ -151,7 +151,7 @@ class CurlTransportTest extends TestCase
             $this->assertSame(CURLE_OPERATION_TIMEOUTED, $e->getCode());
             $this->assertStringContainsString('GET ' . self::$baseUrl . '/sleep', $e->getMessage());
         }
-        $this->assertLessThan(1.5, microtime(true) - $start);
+        $this->assertLessThan(2.0, microtime(true) - $start, 'curl gave up before the 2 s response');
     }
 
     public function testRefusedConnection()

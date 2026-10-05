@@ -20,7 +20,6 @@ use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Mapping\RecordHydrator;
 use NetSuite\Rest\Mapping\TypeMap;
 use NetSuite\Rest\Record\RecordClient;
-use NetSuite\Rest\Record\RecordTypeResolver;
 use NetSuite\Rest\Response\ResponseBuilder;
 
 /**
@@ -37,16 +36,12 @@ final class GetHandler implements OperationHandlerInterface
     /** @var ResponseBuilder */
     private $responses;
 
-    public function __construct(
-        RecordClient $records,
-        ?RecordTypeResolver $types = null,
-        ?RecordHydrator $hydrator = null,
-        ?ResponseBuilder $responses = null
-    ) {
+    public function __construct(RecordClient $records)
+    {
         $this->records = $records;
-        $this->refs = new RecordRefs($types);
-        $this->hydrator = $hydrator ?: new RecordHydrator();
-        $this->responses = $responses ?: new ResponseBuilder();
+        $this->refs = new RecordRefs();
+        $this->hydrator = new RecordHydrator();
+        $this->responses = new ResponseBuilder();
     }
 
     /**

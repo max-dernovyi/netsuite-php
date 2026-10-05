@@ -10,10 +10,13 @@ namespace NetSuite\Rest\Handler;
 
 use NetSuite\Classes\GetListRequest;
 use NetSuite\Classes\GetListResponse;
+use NetSuite\Rest\Exception\NotSupportedOnRestException;
+use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Response\ResponseBuilder;
 
 /**
  * `getList`: one `get` per reference, in order; a failed item does not stop the rest.
+ * A `RestFault` on the first item is thrown, as SOAP would.
  */
 final class GetListHandler implements OperationHandlerInterface
 {
@@ -22,10 +25,10 @@ final class GetListHandler implements OperationHandlerInterface
     /** @var ResponseBuilder */
     private $responses;
 
-    public function __construct(GetHandler $get, ?ResponseBuilder $responses = null)
+    public function __construct(GetHandler $get)
     {
         $this->get = $get;
-        $this->responses = $responses ?: new ResponseBuilder();
+        $this->responses = new ResponseBuilder();
     }
 
     /**
@@ -42,7 +45,16 @@ final class GetListHandler implements OperationHandlerInterface
         }
         $reads = [];
         foreach ($refs as $ref) {
-            $reads[] = $this->get->read($ref);
+            try {
+                $reads[] = $this->get->read($ref);
+            } catch (RestFault $e) {
+                if (!$reads) {
+                    throw $e;
+                }
+                $reads[] = $this->responses->readFault($e);
+            } catch (NotSupportedOnRestException $e) {
+                $reads[] = $this->responses->readFault($e);
+            }
         }
         $response = new GetListResponse();
         $response->readResponseList = $this->responses->readList($reads);

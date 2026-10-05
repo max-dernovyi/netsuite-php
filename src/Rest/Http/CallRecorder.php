@@ -44,17 +44,18 @@ final class CallRecorder
     }
 
     /**
-     * The request line and headers, e.g. "GET https://… HTTP/1.1\r\nAccept: application/json".
+     * The request line and headers, credentials redacted, e.g. "GET https://… HTTP/1.1\r\nAccept: application/json".
      */
     public function getLastRequestHeaders(): ?string
     {
         if ($this->request === null) {
             return null;
         }
-        return implode("\r\n", array_merge(
-            [$this->request->getMethod().' '.$this->request->getUrl().' HTTP/1.1'],
-            $this->request->getHeaderLines()
-        ));
+        $lines = [$this->request->getMethod().' '.$this->request->getUrl().' HTTP/1.1'];
+        foreach ($this->request->getHeaders() as $name => $value) {
+            $lines[] = $name.': '.(in_array(strtolower($name), RestClient::SECRET_HEADERS, true) ? RestClient::REDACTED : $value);
+        }
+        return implode("\r\n", $lines);
     }
 
     public function getLastRequestBody(): ?string

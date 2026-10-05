@@ -12,8 +12,6 @@ use NetSuite\Classes\DeleteRequest;
 use NetSuite\Classes\DeleteResponse;
 use NetSuite\Classes\WriteResponse;
 use NetSuite\Rest\Record\RecordClient;
-use NetSuite\Rest\Record\RecordTypeResolver;
-use NetSuite\Rest\Response\ResponseBuilder;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -25,13 +23,9 @@ final class DeleteHandler extends AbstractWriteHandler
     /** @var LoggerInterface */
     private $logger;
 
-    public function __construct(
-        RecordClient $records,
-        ?LoggerInterface $logger = null,
-        ?RecordTypeResolver $types = null,
-        ?ResponseBuilder $responses = null
-    ) {
-        parent::__construct($records, $types, null, $responses);
+    public function __construct(RecordClient $records, ?LoggerInterface $logger = null)
+    {
+        parent::__construct($records);
         $this->logger = $logger ?: new NullLogger();
     }
 

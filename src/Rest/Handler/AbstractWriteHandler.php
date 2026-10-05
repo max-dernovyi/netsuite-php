@@ -16,11 +16,12 @@ use NetSuite\Classes\WriteResponse;
 use NetSuite\Rest\Exception\RestError;
 use NetSuite\Rest\Mapping\RecordSerializer;
 use NetSuite\Rest\Mapping\SerializedRecord;
+use NetSuite\Rest\Exception\NotSupportedOnRestException;
+use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Record\RecordClient;
-use NetSuite\Rest\Record\RecordTypeResolver;
 use NetSuite\Rest\Response\ResponseBuilder;
 
-abstract class AbstractWriteHandler implements OperationHandlerInterface, RecordWriterInterface
+abstract class AbstractWriteHandler implements OperationHandlerInterface
 {
     /** @var RecordClient */
     protected $records;
@@ -31,18 +32,20 @@ abstract class AbstractWriteHandler implements OperationHandlerInterface, Record
     /** @var ResponseBuilder */
     protected $responses;
 
-    public function __construct(
-        RecordClient $records,
-        ?RecordTypeResolver $types = null,
-        ?RecordSerializer $serializer = null,
-        ?ResponseBuilder $responses = null
-    ) {
+    public function __construct(RecordClient $records)
+    {
         $this->records = $records;
-        $this->refs = new RecordRefs($types);
-        $this->serializer = $serializer ?: new RecordSerializer();
-        $this->responses = $responses ?: new ResponseBuilder();
+        $this->refs = new RecordRefs();
+        $this->serializer = new RecordSerializer();
+        $this->responses = new ResponseBuilder();
     }
 
+    /**
+     * Writes one record, or a reference for delete; API errors come back as a failed status.
+     *
+     * @param mixed $item
+     * @throws RestFault|NotSupportedOnRestException
+     */
     public function write($item): WriteResponse
     {
         try {
@@ -60,15 +63,23 @@ abstract class AbstractWriteHandler implements OperationHandlerInterface, Record
 
     /**
      * @param object $record
-     * @throws RestError for a value that does not match its declared type
+     * @throws RestError for a value that does not match its declared type or cannot be encoded
      */
     protected function serialize($record): SerializedRecord
     {
         try {
-            return $this->serializer->serialize($record);
+            $serialized = $this->serializer->serialize($record);
         } catch (\InvalidArgumentException $e) {
             throw RecordRefs::invalid($e->getMessage(), StatusDetailCodeType::INVALID_FLD_VALUE);
         }
+        // Invalid UTF-8 or NAN/INF would fail later in RestClient, outside the per-item error handling.
+        if (json_encode($serialized->body(), JSON_PRESERVE_ZERO_FRACTION) === false) {
+            throw RecordRefs::invalid(
+                'Record cannot be encoded as JSON: '.json_last_error_msg(),
+                StatusDetailCodeType::INVALID_FLD_VALUE
+            );
+        }
+        return $serialized;
     }
 
     /**

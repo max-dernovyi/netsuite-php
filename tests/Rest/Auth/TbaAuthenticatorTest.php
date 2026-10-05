@@ -121,11 +121,11 @@ class TbaAuthenticatorTest extends TestCase
 
     public function testRealmIsNotEncoded()
     {
-        $header = $this->authenticator(['realm' => '123456_SB1'])
+        $header = $this->authenticator(['realm' => 'TEST REALM'])
             ->authorize(new Request('GET', self::RECORD_URL))
             ->getHeader('Authorization');
 
-        $this->assertStringStartsWith('OAuth realm="123456_SB1", ', $header);
+        $this->assertStringStartsWith('OAuth realm="TEST REALM", ', $header);
     }
 
     public function testDefaultProvidersGiveFreshNonceAndCurrentTimestamp()

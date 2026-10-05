@@ -11,8 +11,6 @@ namespace tests\Netsuite\Rest\Response;
 use NetSuite\Classes\ExceededConcurrentRequestLimitFault;
 use NetSuite\Classes\InvalidCredentialsFault;
 use NetSuite\Classes\UnexpectedErrorFault;
-use NetSuite\Rest\Exception\RestError;
-use NetSuite\Rest\Exception\RestErrorDetail;
 use NetSuite\Rest\Exception\TransportException;
 use NetSuite\Rest\Response\FaultFactory;
 use PHPUnit\Framework\TestCase;
@@ -54,18 +52,6 @@ class FaultFactoryTest extends TestCase
     public function statuses(): array
     {
         return ['200' => [200], '400' => [400], '403' => [403], '404' => [404], '409' => [409]];
-    }
-
-    public function testFromError()
-    {
-        $factory = new FaultFactory();
-        $error = new RestError(401, 'Unauthorized', [new RestErrorDetail('Invalid login attempt.', 'INVALID_LOGIN')]);
-
-        $fault = $factory->fromError($error);
-        $this->assertInstanceOf(InvalidCredentialsFault::class, $fault->getFault());
-        $this->assertSame('Invalid login attempt.', $fault->getFault()->message);
-
-        $this->assertNull($factory->fromError(new RestError(403, 'Forbidden', [new RestErrorDetail('No permission.')])));
     }
 
     public function testFromTransport()

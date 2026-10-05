@@ -68,9 +68,6 @@ class ResponseBuilderTest extends TestCase
         $this->assertFalse($response->status->isSuccess);
         $this->assertSame(StatusDetailCodeType::NONEXISTENT_ID, $response->status->statusDetail[0]->code);
         $this->assertNull($response->baseRef);
-
-        $ref = $this->builder->recordRef('42');
-        $this->assertSame($ref, $this->builder->writeFailure($this->notFound(), $ref)->baseRef);
     }
 
     public function testWriteList()

@@ -28,9 +28,9 @@ final class RecordRefs
     /** @var RecordTypeResolver */
     private $types;
 
-    public function __construct(?RecordTypeResolver $types = null)
+    public function __construct()
     {
-        $this->types = $types ?: new RecordTypeResolver();
+        $this->types = new RecordTypeResolver();
     }
 
     /**

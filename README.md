@@ -125,10 +125,14 @@ $config['host'] = 'https://webservices.netsuite.com';
 
 Set `transport` to `rest` to send requests to the NetSuite REST Record API
 instead of SOAP. `NetSuiteService` and the `NetSuite\Classes` objects stay the
-same. The REST host is derived from `account`.
+same. The REST host is derived from `account` (`123456_SB1` and `123456-sb1`
+both work). `endpoint` and `host` are optional; the SOAP fallback defaults to
+`2025_2` and `https://<account>.suitetalk.api.netsuite.com`.
 
 ```php
-$config['transport'] = 'rest';   // "soap" (default) or "rest"; env NETSUITE_TRANSPORT
+$config['transport']   = 'rest'; // "soap" (default) or "rest"; env NETSUITE_TRANSPORT
+$config['timeout']     = 60;     // optional, seconds per REST request
+$config['maxAttempts'] = 3;      // optional; GET, PUT and DELETE are retried, POST and PATCH are not
 ```
 
 REST reuses the TBA keys. OAuth 2.0 client credentials are used instead when
@@ -139,14 +143,14 @@ $config['oauth2ClientId']      = 'CLIENT_ID';
 $config['oauth2CertificateId'] = 'CERTIFICATE_ID';
 $config['oauth2PrivateKey']    = '/path/to/private.pem'; // PEM contents or a file path
 $config['oauth2Algorithm']     = 'PS256';                // "PS256" (default) or "ES256"
-// optional
-$config['timeout']     = 60;  // seconds
-$config['maxAttempts'] = 3;   // GET, PUT and DELETE are retried; POST and PATCH are not
 ```
+
+TBA on REST supports only `signatureAlgorithm = sha256`.
 
 Operations on REST: `get`, `getList`, `add`, `update`, `upsert`, `delete`,
 `addList`, `updateList`, `upsertList`, `deleteList`. List forms make one REST
-call per record. Every other operation is sent via SOAP and logs a PSR-3
+call per record; a `RestFault` on the first item is thrown, a `RestFault` on a
+later item or an item unsupported on REST becomes that item's failed status. Every other operation is sent via SOAP and logs a PSR-3
 warning `NetSuite REST: operation "<op>" is not supported, sent via SOAP`.
 Without TBA keys the fallback is impossible and
 `NetSuite\Rest\Exception\NotSupportedOnRestException` is thrown.
@@ -162,6 +166,12 @@ Differences from SOAP:
   is created until a fallback needs one.
 * Preferences, search preferences, application info and custom headers apply
   only to SOAP calls.
+* `deletionReason` is ignored.
+* External ids may contain only letters, digits, `_` and `-`.
+* A `CustomRecordRef` or custom record type needs its `customrecord_*` script
+  id; an internal `typeId` alone throws `NotSupportedOnRestException`.
+* Each REST exchange is logged as one entry (operation `rest`) with credentials
+  redacted; `__getLastRequestHeaders()` redacts `Authorization` too.
 
 Tests run in Docker (`PHP` defaults to 8.5):
 
@@ -170,6 +180,12 @@ make test PHP=7.4
 make lint PHP=7.4
 make coverage
 ```
+
+SOAP/REST parity against a sandbox: set `NETSUITE_PARITY_ACCOUNT`, the TBA env
+keys and optionally `NETSUITE_PARITY_CUSTOMER_ID`,
+`NETSUITE_PARITY_SALES_ORDER_ID`, `NETSUITE_PARITY_SUBSIDIARY_ID`, then run
+`vendor/bin/phpunit --group parity` with a local PHP (the Docker targets pass
+no env).
 
 ## Examples
 

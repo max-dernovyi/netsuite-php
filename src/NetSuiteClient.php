@@ -98,7 +98,8 @@ class NetSuiteClient
 
         if (RestConfig::transportOf($this->config) === RestConfig::TRANSPORT_REST) {
             $this->restConfig = RestConfig::fromArray($this->config);
-            // The SOAP fallback needs these; rest configs may omit them.
+            // The SOAP fallback signs with the exact realm and needs endpoint and host, which rest configs may omit.
+            $this->config['account'] = $this->restConfig->realm();
             if (empty($this->config['endpoint'])) {
                 $this->config['endpoint'] = self::DEFAULT_ENDPOINT;
             }
@@ -175,6 +176,12 @@ class NetSuiteClient
             if ($optVal = getenv($optKey)) {
                 $config[$cfgKey] = $optVal;
             }
+        }
+
+        // In rest mode the SOAP fallback host is derived from the account.
+        $isRest = strtolower(trim((string) getenv('NETSUITE_TRANSPORT'))) === RestConfig::TRANSPORT_REST;
+        if ($isRest && !getenv('NETSUITE_HOST')) {
+            $config['host'] = '';
         }
 
         return $config;

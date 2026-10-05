@@ -181,6 +181,7 @@ class WriteHandlerTest extends TestCase
         $write = (new AddHandler($this->records))->write($record);
 
         $this->assertSame(self::RECORD_URL.'/customrecord_widget', $this->request()->getUrl());
+        $this->assertSame(['name' => 'Blue widget'], $this->body());
         $this->assertTrue($write->status->isSuccess);
         $this->assertInstanceOf(CustomRecordRef::class, $write->baseRef);
         $this->assertSame('9', $write->baseRef->internalId);
@@ -212,11 +213,17 @@ class WriteHandlerTest extends TestCase
     {
         $badValue = new Customer();
         $badValue->isPerson = 'maybe';
+        $badUtf8 = new Customer();
+        $badUtf8->companyName = "Caf\xE9";
+        $notFinite = new Customer();
+        $notFinite->creditLimit = NAN;
 
         return [
             'null'        => [null, StatusDetailCodeType::INVALID_RCRD_TYPE],
             'not a record' => [new RecordRef(), StatusDetailCodeType::INVALID_RCRD_TYPE],
             'bad value'   => [$badValue, StatusDetailCodeType::INVALID_FLD_VALUE],
+            'invalid utf-8' => [$badUtf8, StatusDetailCodeType::INVALID_FLD_VALUE],
+            'not finite'  => [$notFinite, StatusDetailCodeType::INVALID_FLD_VALUE],
         ];
     }
 
@@ -486,6 +493,58 @@ class WriteHandlerTest extends TestCase
         $this->assertFailure($list->writeResponse[1], StatusDetailCodeType::INVALID_KEY_OR_REF);
         $this->assertSuccess($list->writeResponse[2], '2', null, RecordType::customer);
         $this->assertCount(2, $this->transport->requests);
+    }
+
+    public function testAddListTurnsFaultsAfterTheFirstItemIntoStatuses()
+    {
+        $this->transport->push($this->created('customer', '1'));
+        $this->transport->push(new Response(500, [], '{"title":"Internal Server Error","status":500}'));
+        $this->transport->push($this->created('customer', '3'));
+        $typeIdOnly = new CustomRecord();
+        $typeIdOnly->recType = new RecordRef();
+        $typeIdOnly->recType->internalId = '314';
+        $request = new AddListRequest();
+        $request->record = [$this->customer(null, 'A'), $this->customer(null, 'B'), $typeIdOnly, $this->customer(null, 'C')];
+
+        $list = (new WriteListHandler(new AddHandler($this->records), AddListResponse::class, 'record'))
+            ->handle($request)->writeResponseList;
+
+        $this->assertSuccess($list->writeResponse[0], '1', 'A', RecordType::customer);
+        $this->assertFailure($list->writeResponse[1], StatusDetailCodeType::UNEXPECTED_ERROR, 'HTTP 500');
+        $this->assertFailure($list->writeResponse[2], StatusDetailCodeType::USER_ERROR);
+        $this->assertSuccess($list->writeResponse[3], '3', 'C', RecordType::customer);
+        $this->assertCount(3, $this->transport->requests);
+    }
+
+    public function testAddListThrowsAFaultOnTheFirstItem()
+    {
+        $this->transport->push(new Response(500, [], '{"title":"Internal Server Error","status":500}'));
+        $request = new AddListRequest();
+        $request->record = [$this->customer(null, 'A'), $this->customer(null, 'B')];
+
+        try {
+            (new WriteListHandler(new AddHandler($this->records), AddListResponse::class, 'record'))->handle($request);
+            $this->fail('RestFault expected');
+        } catch (RestFault $fault) {
+            $this->assertCount(1, $this->transport->requests);
+        }
+    }
+
+    public function testAddListTurnsAnUnsupportedFirstItemIntoAStatus()
+    {
+        $this->transport->push($this->created('customer', '1'));
+        $typeIdOnly = new CustomRecord();
+        $typeIdOnly->recType = new RecordRef();
+        $typeIdOnly->recType->internalId = '314';
+        $request = new AddListRequest();
+        $request->record = [$typeIdOnly, $this->customer(null, 'A')];
+
+        $list = (new WriteListHandler(new AddHandler($this->records), AddListResponse::class, 'record'))
+            ->handle($request)->writeResponseList;
+
+        $this->assertFailure($list->writeResponse[0], StatusDetailCodeType::USER_ERROR);
+        $this->assertSuccess($list->writeResponse[1], '1', 'A', RecordType::customer);
+        $this->assertCount(1, $this->transport->requests);
     }
 
     public function testUpsertListAcceptsASingleRecord()

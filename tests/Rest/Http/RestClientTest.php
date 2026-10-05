@@ -471,9 +471,10 @@ class RestClientTest extends TestCase
 
         $recorder = $client->getRecorder();
         $this->assertSame($this->transport->requests[1], $recorder->getLastRequest());
+        $this->assertSame('Bearer token-2', $recorder->getLastRequest()->getHeader('Authorization'));
         $this->assertSame(200, $recorder->getLastResponse()->getStatusCode());
         $this->assertSame(
-            "GET ".self::BASE_URL."/record/v1/customer/42?expandSubResources=true HTTP/1.1\r\nAccept: application/json\r\nAuthorization: Bearer token-2",
+            "GET ".self::BASE_URL."/record/v1/customer/42?expandSubResources=true HTTP/1.1\r\nAccept: application/json\r\nAuthorization: [redacted]",
             $recorder->getLastRequestHeaders()
         );
         $this->assertNull($recorder->getLastRequestBody());

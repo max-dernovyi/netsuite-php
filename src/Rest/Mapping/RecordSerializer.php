@@ -10,13 +10,15 @@ namespace NetSuite\Rest\Mapping;
 
 use NetSuite\Classes\BaseRef;
 use NetSuite\Classes\CustomFieldRef;
+use NetSuite\Classes\CustomRecord;
 use NetSuite\Classes\ListOrRecordRef;
 use NetSuite\Rest\Exception\NotSupportedOnRestException;
 
 /**
  * Generated record → REST JSON body, driven by each class's `$paramtypesmap` (merged up the class hierarchy).
  *
- * - null properties are omitted; the top-level `internalId` is left out (it goes into the path)
+ * - null properties are omitted; the top-level `internalId` (and a custom record's `recType`) is left out
+ *   (it goes into the path)
  * - references → `{"id"}` or `{"externalId"}`; enums → `{"id"}` with the value from EnumMapper
  * - `customFieldList` → top-level keys by script id; `nullFieldList` → explicit nulls
  * - list classes → `{"items": [...]}`; a top-level sublist with `replaceAll` true or unset (the SuiteTalk default)
@@ -64,8 +66,9 @@ final class RecordSerializer
         $shortClass = substr($class, strrpos('\\'.$class, '\\'));
         $body = [];
         $nulls = null;
+        $pathFields = $replace === null ? [] : ($object instanceof CustomRecord ? ['internalId', 'recType'] : ['internalId']);
         foreach (TypeMap::fields($class) as $field => $type) {
-            if (!isset($object->$field) || ($replace !== null && $field === 'internalId')) {
+            if (!isset($object->$field) || in_array($field, $pathFields, true)) {
                 continue;
             }
             $value = $object->$field;

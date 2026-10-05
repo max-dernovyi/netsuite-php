@@ -58,13 +58,6 @@ final class Request
         return $clone;
     }
 
-    public function withoutHeader(string $name): self
-    {
-        $clone = clone $this;
-        unset($clone->headers[strtolower($name)]);
-        return $clone;
-    }
-
     /**
      * @return string[] "Name: value" lines
      */

@@ -48,7 +48,6 @@ class RequestResponseTest extends TestCase
 
         $this->assertSame('old', $request->getHeader('Authorization'));
         $this->assertSame(['Authorization' => 'new'], $signed->getHeaders());
-        $this->assertSame([], $signed->withoutHeader('AUTHORIZATION')->getHeaders());
     }
 
     public function testResponseHeadersAndJson()

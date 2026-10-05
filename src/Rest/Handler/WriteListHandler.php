@@ -8,15 +8,17 @@
 
 namespace NetSuite\Rest\Handler;
 
+use NetSuite\Rest\Exception\NotSupportedOnRestException;
+use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Response\ResponseBuilder;
 
 /**
  * `addList`, `updateList`, `upsertList`, `deleteList`: the single-record writer per item, in order;
- * a failed item does not stop the rest.
+ * a failed item does not stop the rest. A `RestFault` on the first item is thrown, as SOAP would.
  */
 final class WriteListHandler implements OperationHandlerInterface
 {
-    /** @var RecordWriterInterface */
+    /** @var AbstractWriteHandler */
     private $writer;
     /** @var string */
     private $responseClass;
@@ -33,17 +35,16 @@ final class WriteListHandler implements OperationHandlerInterface
      * @param callable|null $prepare `fn(object $request): void`, called once before the items
      */
     public function __construct(
-        RecordWriterInterface $writer,
+        AbstractWriteHandler $writer,
         string $responseClass,
         string $itemProperty,
-        ?callable $prepare = null,
-        ?ResponseBuilder $responses = null
+        ?callable $prepare = null
     ) {
         $this->writer = $writer;
         $this->responseClass = $responseClass;
         $this->itemProperty = $itemProperty;
         $this->prepare = $prepare;
-        $this->responses = $responses ?: new ResponseBuilder();
+        $this->responses = new ResponseBuilder();
     }
 
     public function handle($request)
@@ -59,7 +60,16 @@ final class WriteListHandler implements OperationHandlerInterface
         }
         $writes = [];
         foreach ($items as $item) {
-            $writes[] = $this->writer->write($item);
+            try {
+                $writes[] = $this->writer->write($item);
+            } catch (RestFault $e) {
+                if (!$writes) {
+                    throw $e;
+                }
+                $writes[] = $this->responses->writeFault($e);
+            } catch (NotSupportedOnRestException $e) {
+                $writes[] = $this->responses->writeFault($e);
+            }
         }
         $response = new $this->responseClass();
         $response->writeResponseList = $this->responses->writeList($writes);

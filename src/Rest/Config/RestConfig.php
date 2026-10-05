@@ -25,8 +25,6 @@ final class RestConfig
     const OAUTH2_KEYS = ['oauth2ClientId', 'oauth2CertificateId', 'oauth2PrivateKey'];
 
     /** @var string */
-    private $transport;
-    /** @var string */
     private $realm;
     /** @var string */
     private $host;
@@ -59,7 +57,7 @@ final class RestConfig
     public static function fromArray(array $config): self
     {
         $self = new self();
-        $self->transport = self::transportOf($config);
+        self::transportOf($config);
 
         if (!self::filled($config, 'account')) {
             throw new \RuntimeException('Config key missing: account');
@@ -171,16 +169,6 @@ final class RestConfig
             throw new \RuntimeException('Config key invalid: '.$key.' must be a positive '.($integer ? 'integer' : 'number'));
         }
         return $integer ? (int) $value : $value + 0;
-    }
-
-    public function transport(): string
-    {
-        return $this->transport;
-    }
-
-    public function isRest(): bool
-    {
-        return $this->transport === self::TRANSPORT_REST;
     }
 
     /**

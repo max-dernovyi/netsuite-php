@@ -8,7 +8,6 @@
 
 namespace NetSuite\Rest\Response;
 
-use NetSuite\Rest\Exception\RestError;
 use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Exception\TransportException;
 
@@ -32,11 +31,6 @@ final class FaultFactory
             return RestFault::unexpectedError($message, $httpStatus);
         }
         return null;
-    }
-
-    public function fromError(RestError $error): ?RestFault
-    {
-        return $this->forHttpStatus($error->getHttpStatus(), $error->getMessage());
     }
 
     /**

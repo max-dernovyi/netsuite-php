@@ -25,9 +25,9 @@ final class ResponseBuilder
     /** @var StatusFactory */
     private $statuses;
 
-    public function __construct(?StatusFactory $statuses = null)
+    public function __construct()
     {
-        $this->statuses = $statuses ?: new StatusFactory();
+        $this->statuses = new StatusFactory();
     }
 
     public function recordRef(?string $internalId, ?string $externalId = null, ?string $type = null): RecordRef
@@ -47,11 +47,17 @@ final class ResponseBuilder
         return $response;
     }
 
-    public function writeFailure(RestError $error, ?BaseRef $baseRef = null): WriteResponse
+    public function writeFailure(RestError $error): WriteResponse
     {
         $response = new WriteResponse();
         $response->status = $this->statuses->fromError($error);
-        $response->baseRef = $baseRef;
+        return $response;
+    }
+
+    public function writeFault(\Exception $e): WriteResponse
+    {
+        $response = new WriteResponse();
+        $response->status = $this->statuses->fromException($e);
         return $response;
     }
 
@@ -78,6 +84,13 @@ final class ResponseBuilder
     {
         $response = new ReadResponse();
         $response->status = $this->statuses->fromError($error);
+        return $response;
+    }
+
+    public function readFault(\Exception $e): ReadResponse
+    {
+        $response = new ReadResponse();
+        $response->status = $this->statuses->fromException($e);
         return $response;
     }
 

@@ -181,6 +181,25 @@ class NetSuiteClientTest extends TestCase
         $this->assertEquals('ES256', $config['oauth2Algorithm']);
     }
 
+    public function testEnvRestConfigDerivesTheFallbackHostFromTheAccount()
+    {
+        $config = $this->withEnv([
+            'NETSUITE_TRANSPORT'       => 'rest',
+            'NETSUITE_HOST'            => null,
+            'NETSUITE_ACCOUNT'         => '123456_SB1',
+            'NETSUITE_CONSUMER_KEY'    => 'ck-123',
+            'NETSUITE_CONSUMER_SECRET' => 'cs-456',
+            'NETSUITE_TOKEN_KEY'       => 'tk-789',
+            'NETSUITE_TOKEN_SECRET'    => 'ts-012',
+        ], [NetSuiteClient::class, 'getEnvConfig']);
+
+        $this->assertSame('', $config['host']);
+        $client = new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $property = new \ReflectionProperty(NetSuiteClient::class, 'config');
+        $property->setAccessible(true);
+        $this->assertSame('https://123456-sb1.suitetalk.api.netsuite.com', $property->getValue($client)['host']);
+    }
+
     /**
      * @dataProvider transportProvider
      */
