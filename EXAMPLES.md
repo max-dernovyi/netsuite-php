@@ -1,248 +1,196 @@
-# Usage Examples
+# Usage examples
 
-* [Introduction](#Introduction)
-* [Retrieve a Record](#Retrieve-a-Record)
-* [Search For a Record](#Search-for-a-Record)
-* [Add a Customer Record](#Add-a-Customer-Record)
-* [Add a SalesOrder with a Custom Field](#Add-a-Record-with-a-Custom-Field)
-* [Add an ItemFulfillment Record](#Add-an-item-fulfillment)
+The examples assume a `$service` created as in the [README](README.md#quickstart).
+All request, response and record classes live in `NetSuite\Classes`; the
+[Schema Browser 2025.2](https://system.netsuite.com/help/helpcenter/en_US/srbrowser/Browser2025_2/schema/record/customer.html)
+lists their fields.
+
+* [Get a record by external id](#get-a-record-by-external-id)
+* [Search with paging](#search-with-paging)
+* [Add a customer](#add-a-customer)
+* [Add a sales order with a custom field](#add-a-sales-order-with-a-custom-field)
+* [Upsert by external id](#upsert-by-external-id)
+* [Fulfill a sales order](#fulfill-a-sales-order)
+* [Errors](#errors)
 * [Resources](#resources)
 
-### Introduction
-
-This document contains a few basic usage examples of web services calls built
-using the `netsuitephp/netsuite-php` library.
-
-This is not intended to be a
-tutorial or an exhaustive list of typical api calls, but a simple
-demonstration of how the library can be used to interact with NetSuite's
-web services. Once you understand how the most basic request is built and
-sent, you should be able to do pretty much anything supported by NetSuite
-by using the web services documentation and by looking through the list of
-classes in `netsuite-php/src/Classes` (this last part can't be overstressed).
-
-The list of examples below should really be satisfactory to get someone
-pointed in the right direction, so if you don't see your exact use case
-below, you should just adapt these concepts and mix in a dash of
-experimentation. Unless a very compelling case is put forward to the contrary,
-there's no plan to continue expanding this set of examples.
-
-
-#### Retrieve a Record
+## Get a record by external id
 
 ```php
-// Fetch a Customer record by their internalId
 use NetSuite\Classes\GetRequest;
 use NetSuite\Classes\RecordRef;
 
 $request = new GetRequest();
 $request->baseRef = new RecordRef();
-$request->baseRef->internalId = "123456789";
-$request->baseRef->type = "customer";
+$request->baseRef->type = 'customer';
+$request->baseRef->externalId = 'CUST-1001';
 
-$getResponse = $service->get($request);
-
-if ( ! $getResponse->readResponse->status->isSuccess) {
-    echo "GET ERROR";
-} else {
-    $customer = $getResponse->readResponse->record;
+$read = $service->get($request)->readResponse;
+if ($read->status->isSuccess) {
+    $customer = $read->record;
 }
 ```
 
-#### Search For a Record
+## Search with paging
 
 ```php
-// Find a record whose first name starts with "Justin"
-use NetSuite\Classes\SearchStringField;
 use NetSuite\Classes\CustomerSearchBasic;
+use NetSuite\Classes\SearchMoreWithIdRequest;
 use NetSuite\Classes\SearchRequest;
+use NetSuite\Classes\SearchStringField;
 
-// Limit to 20 results per page
-$service->setSearchPreferences(false, 20);
-
-$searchField = new SearchStringField();
-$searchField->operator = "startsWith";
-$searchField->searchValue = "Justin";
+$service->setSearchPreferences(true, 100); // body fields only, 100 records per page
 
 $search = new CustomerSearchBasic();
-$search->firstName = $searchField;
+$search->email = new SearchStringField();
+$search->email->operator = 'contains';
+$search->email->searchValue = 'example.com';
 
 $request = new SearchRequest();
 $request->searchRecord = $search;
+$result = $service->search($request)->searchResult;
 
-$searchResponse = $service->search($request);
-
-if (!$searchResponse->searchResult->status->isSuccess) {
-    echo "SEARCH ERROR";
-} else {
-    $result = $searchResponse->searchResult;
-    $count = $result->totalRecords;
-    $records = $result->recordList;
-
-    echo $count . " records were found.";
+while ($result->status->isSuccess) {
+    foreach ($result->recordList->record ?? [] as $customer) {
+        // ...
+    }
+    if ($result->pageIndex >= $result->totalPages) {
+        break;
+    }
+    $more = new SearchMoreWithIdRequest();
+    $more->searchId = $result->searchId;
+    $more->pageIndex = $result->pageIndex + 1;
+    $result = $service->searchMoreWithId($more)->searchResult;
 }
 ```
 
-#### Add a Customer Record
+## Add a customer
 
 ```php
-// Create a new Customer record
-use NetSuite\Classes\Customer;
-use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\AddRequest;
+use NetSuite\Classes\Customer;
 
 $customer = new Customer();
-$customer->firstName = "John";
-$customer->lastName = "Doe";
-$customer->companyName = "Bobby's Bits";
-$customer->phone = "123456789";
-$customer->email = "test@example.com";
-// ... add all of your fields, then create the request
+$customer->externalId = 'CUST-1001';
+$customer->companyName = 'Example Ltd';
+$customer->email = 'billing@example.com';
+
 $request = new AddRequest();
 $request->record = $customer;
+$write = $service->add($request)->writeResponse;
 
-$addResponse = $service->add($request);
-
-if (!$addResponse->writeResponse->status->isSuccess) {
-    echo "ADD ERROR";
-} else {
-    echo "ADD SUCCESS, id " . $addResponse->writeResponse->baseRef->internalId;
+if ($write->status->isSuccess) {
+    $customerId = $write->baseRef->internalId;
 }
 ```
 
-#### Add a SalesOrder with a Custom Field
-
-This example of an order creation is not a complete example but shows how
-you set up and add the object generally as well as how you would add custom
-fields to the sale on insert.
+## Add a sales order with a custom field
 
 ```php
 use NetSuite\Classes\AddRequest;
 use NetSuite\Classes\CustomFieldList;
 use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\SalesOrder;
-use NetSuite\Classes\StringCustomField;
+use NetSuite\Classes\SalesOrderItem;
+use NetSuite\Classes\SalesOrderItemList;
+use NetSuite\Classes\StringCustomFieldRef;
 
-$sale = new SalesOrder();
+$order = new SalesOrder();
+$order->entity = new RecordRef();
+$order->entity->internalId = $customerId;
 
-// Associate a customer record with this order
-$sale->entity = new RecordRef();
-$sale->entity->type = 'customer';
-$sale->entity->internalId = $myCustomerInternalId;
+$line = new SalesOrderItem();
+$line->item = new RecordRef();
+$line->item->internalId = $itemId;
+$line->quantity = 2;
+$order->itemList = new SalesOrderItemList();
+$order->itemList->item = [$line];
 
-// Set the date of the order
-$sale->tranDate = $myOrderDate;
+$orderNumber = new StringCustomFieldRef();
+$orderNumber->scriptId = 'custbody_order_number';
+$orderNumber->value = 'WEB-1001';
+$order->customFieldList = new CustomFieldList();
+$order->customFieldList->customField = [$orderNumber];
 
-// Set the shipping method and price for the order
-$sale->shipMethod = new RecordRef();
-$sale->shipMethod->internalId = $myShipMethodId;
-$sale->shippingCost = $myShippingTotal;
-
-// Look at the SalesOrder class definition for a list of all the available
-// properties and their types that you can use on a sales order in NetSuite.
-// You'll need to add items, addresses, status, etc.
-
-// Create a sample string-type custom field to the order which represents
-// the ID of the order in our source platform:
-$cfOrderNum = new StringCustomFieldRef();
-$cfOrderNum->scriptId = 'custbody_order_id';
-$cfOrderNum->value = $myOrderId; // Some value from your application
-
-// Collect all custom fields into an array and add the list of fields to the
-// order add request:
-$customFields[] = $cfOrderNum;
-$sale->customFieldList = new CustomFieldList();
-$sale->customFieldList->customField = $customFields;
-
-// Submit the sales order create request
 $request = new AddRequest();
-$request->record = $sale;
-$addResponse = $service->add($request);
-
-if (!$addResponse->writeResponse->status->isSuccess) {
-    echo "ADD ERROR";
-} else {
-    echo "ADD SUCCESS, id " . $addResponse->writeResponse->baseRef->internalId;
-}
+$request->record = $order;
+$write = $service->add($request)->writeResponse;
 ```
 
-#### Add an Item Fulfillment
+## Upsert by external id
 
-Creating an item fulfillment against a Sales Order requires initializing the
-new record based on the target record (the sales order). Then you can set
-the properties on the new record accordingly and add it to NetSuite. The
-same method is used for creating CashSale records.
+Creates the record, or updates the one with the same `externalId`.
+
+```php
+use NetSuite\Classes\Customer;
+use NetSuite\Classes\UpsertRequest;
+
+$customer = new Customer();
+$customer->externalId = 'CUST-1001';
+$customer->companyName = 'Example Ltd';
+
+$request = new UpsertRequest();
+$request->record = $customer;
+$write = $service->upsert($request)->writeResponse;
+```
+
+## Fulfill a sales order
+
+`initialize` prefills the fulfillment from the sales order; change what you need,
+then `add` it. Cash sales and invoices work the same way.
 
 ```php
 use NetSuite\Classes\AddRequest;
 use NetSuite\Classes\InitializeRecord;
 use NetSuite\Classes\InitializeRef;
+use NetSuite\Classes\InitializeRefType;
 use NetSuite\Classes\InitializeRequest;
+use NetSuite\Classes\InitializeType;
 use NetSuite\Classes\ItemFulfillmentPackage;
 use NetSuite\Classes\ItemFulfillmentPackageList;
 
-// Initialize an item fulfillment from an existing Sales Order
-$reference = new InitializeRef();
-$reference->type = InitializeRefType::salesOrder;
-$reference->internalId = $mySalesOrderInternalId;
-
-$record = new InitializeRecord();
-$record->type = InitializeType::itemFulfillment;
-$record->reference = $reference;
+$initialize = new InitializeRecord();
+$initialize->type = InitializeType::itemFulfillment;
+$initialize->reference = new InitializeRef();
+$initialize->reference->type = InitializeRefType::salesOrder;
+$initialize->reference->internalId = $salesOrderId;
 
 $request = new InitializeRequest();
-$request->initializeRecord = $record;
+$request->initializeRecord = $initialize;
+$read = $service->initialize($request)->readResponse;
 
-$initResponse = $service->initialize($request);
+if ($read->status->isSuccess) {
+    $fulfillment = $read->record;
 
-if (!$initResponse->readResponse->status->isSuccess) {
-    echo "INIT ERROR";
-}
+    $package = new ItemFulfillmentPackage();
+    $package->packageWeight = 1;
+    $package->packageTrackingNumber = '1Z999AA10123456784';
+    $fulfillment->packageList = new ItemFulfillmentPackageList();
+    $fulfillment->packageList->package = [$package];
 
-$itemFulfillment = $initResponse->readResponse->record;
-
-// Create and add a package object to the ItemFulfillment
-$package = new ItemFulfillmentPackage();
-$package->packageWeight = 1;
-$package->packageTrackingNumber = $myTrackingNumber;
-
-$packageList = new ItemFulfillmentPackageList();
-$packageList->package = $package;
-$itemFulfillment->packageList = $packageList;
-
-$request = new AddRequest();
-$request->record = $itemFulfillment;
-
-$addResponse = $service->add($request);
-
-if (!$addResponse->writeResponse->status->isSuccess) {
-    echo "ADD ERROR";
-} else {
-    echo "ADD SUCCESS, id " . $addResponse->writeResponse->baseRef->internalId;
+    $request = new AddRequest();
+    $request->record = $fulfillment;
+    $write = $service->add($request)->writeResponse;
 }
 ```
 
-### Resources
+## Errors
 
-The best source of information on how to build valid requests is the Schema
-Browser for the web services version you're working with. The SuiteTalk docs
-link below will have a link to the most recent schema browser.
+Business errors come back in the response status:
 
-* https://www.netsuite.com/portal/developers/resources/suitetalk-documentation.shtml
----
-If you are still having trouble figuring out how to accomplish the task at
-hand, then you could try searching the `[netsuite]` tag on stackoverflow or
-posting your own query under that tag if no previous solutions are found:
+```php
+if (!$write->status->isSuccess) {
+    foreach ($write->status->statusDetail as $detail) {
+        echo $detail->code, ': ', $detail->message, PHP_EOL;
+    }
+}
+```
 
-* https://stackoverflow.com/questions/tagged/netsuite
----
-We have our own small discussion area attached to this library repo
-on github where you can try to look for assistance, but this area has very
-low visibility and Stack is likely to be much more fruitful.
+Authentication, throttling and connection errors throw `\SoapFault`
+(`NetSuite\Rest\Exception\RestFault`, a subclass, on the REST transport).
 
-* https://github.com/netsuitephp/netsuite-php/discussions
----
-Finally, there's always NetSuite's own support. They provide some direct
-support and also certify third party consultants to help with implementations.
+## Resources
 
-* https://www.netsuite.com/portal/services/support-services/suiteanswers.shtml
+* [SuiteTalk Web Services](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/set_22152129.html) in the Oracle NetSuite Help Center
+* [SOAP to REST upgrade guide](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/book_8110600984.html)
+* [Issues](https://github.com/max-dernovyi/netsuite-php/issues) for bugs in this package
