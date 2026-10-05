@@ -12,6 +12,7 @@ use NetSuite\Rest\Auth\AuthenticatorInterface;
 use NetSuite\Rest\Config\RestConfig;
 use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Exception\TransportException;
+use NetSuite\Rest\Response\FaultFactory;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -57,6 +58,8 @@ final class RestClient
     private $logging;
     /** @var ErrorParser */
     private $errors;
+    /** @var FaultFactory */
+    private $faults;
 
     /**
      * @param callable|null $random returns a float in [0, 1) for backoff jitter
@@ -84,6 +87,7 @@ final class RestClient
         $this->clock = $clock ?: 'time';
         $this->logging = $config->logging();
         $this->errors = new ErrorParser();
+        $this->faults = new FaultFactory();
     }
 
     public function setLogging(bool $on): void
@@ -122,7 +126,7 @@ final class RestClient
             } catch (TransportException $e) {
                 $this->record($signed, null, $e);
                 if ($attempt >= $maxAttempts) {
-                    throw RestFault::unexpectedError($this->failure($request, $attempt, $e->getMessage()));
+                    throw $this->faults->fromTransport($e, $this->failure($request, $attempt, $e->getMessage()));
                 }
                 $this->sleeper->sleep($this->backoff($attempt++));
                 continue;
@@ -226,13 +230,7 @@ final class RestClient
     {
         $status = $response->getStatusCode();
         $message = $this->failure($request, $attempt, 'HTTP '.$status.': '.$this->errors->parse($response)->getMessage());
-        if ($status === 401) {
-            return RestFault::invalidCredentials($message, $status);
-        }
-        if ($status === 429) {
-            return RestFault::exceededConcurrentRequestLimit($message, $status);
-        }
-        return RestFault::unexpectedError($message, $status);
+        return $this->faults->forHttpStatus($status, $message) ?: RestFault::unexpectedError($message, $status);
     }
 
     private function failure(Request $request, int $attempt, string $reason): string
