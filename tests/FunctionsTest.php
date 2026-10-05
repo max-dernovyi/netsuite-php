@@ -120,6 +120,40 @@ class FunctionsTest extends TestCase
         $this->assertSame($ref, $item->item);
     }
 
+    public function testSetFieldsWithObjectArray()
+    {
+        $list = new \NetSuite\Classes\SalesOrderItemList();
+        setFields($list, ['item' => [['quantity' => 2], ['quantity' => 3]]]);
+
+        $this->assertCount(2, $list->item);
+        $this->assertInstanceOf(\NetSuite\Classes\SalesOrderItem::class, $list->item[0]);
+        $this->assertEquals(3, $list->item[1]->quantity);
+    }
+
+    public function testSetFieldsWithStringArray()
+    {
+        $nullField = new \NetSuite\Classes\NullField();
+        setFields($nullField, ['name' => ['memo', 'email']]);
+
+        $this->assertSame(['memo', 'email'], $nullField->name);
+    }
+
+    public function testSetFieldsWithDateTimeArray()
+    {
+        $list = new \NetSuite\Classes\ExclusionDateList();
+        setFields($list, ['exclusionDate' => ['2026-01-01T00:00:00Z', '2026-12-25T00:00:00Z']]);
+
+        $this->assertSame(['2026-01-01T00:00:00Z', '2026-12-25T00:00:00Z'], $list->exclusionDate);
+    }
+
+    public function testSetFieldsWithEnumArray()
+    {
+        $list = new \NetSuite\Classes\ProductFeedList();
+        setFields($list, ['productFeed' => ['_googleBase', '_shoppingCom']]);
+
+        $this->assertSame(['_googleBase', '_shoppingCom'], $list->productFeed);
+    }
+
     public function testSetFieldsWarnsOnInvalidParameter()
     {
         $ref = new \NetSuite\Classes\RecordRef();

@@ -97,8 +97,8 @@ namespace {
                         // example: $item1 = new nsComplexObject('SalesOrderItem');
                         $val[] = $item;
                     }
-                    elseif ($typesmap[$fldName] == "string") {
-                        // handle enums
+                    elseif (!is_array($item)) {
+                        // scalar and enum values: string[], dateTime[], enum[]
                         $val[] = $item;
                     }
                     else {
