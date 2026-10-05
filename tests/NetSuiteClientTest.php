@@ -84,7 +84,7 @@ class NetSuiteClientTest extends TestCase
         try {
             $config = NetSuiteClient::getEnvConfig();
 
-            $this->assertEquals('2021_1', $config['endpoint']);
+            $this->assertEquals('2025_2', $config['endpoint']);
             $this->assertEquals('https://webservices.sandbox.netsuite.com', $config['host']);
             $this->assertEquals('3', $config['role']);
             $this->assertArrayNotHasKey('consumerKey', $config);
