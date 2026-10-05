@@ -162,20 +162,7 @@ included with the package to do so, using the following steps:
 
 #### PHP Version Support
 
-See: https://www.php.net/supported-versions.php
-
-With official support for PHP5 gone since the end of 2018 and with PHP7
-moving to security-only by the end of 2021, the versions of PHP supported
-by this package will start to be gradually moved forward.
-
-For the time being, expect the following for `netsuitephp/netsuite-php`:
-
-* require `"php": ">=7.1"` as of the `2021_1` build
-* require `"php": ">=8"` as of the `2023_1` build
-
-**This will apply only to new releases of the package, so you will still be
-able to continue using the last supported version for your PHP release if
-you can't or won't update PHP.**
+Requires PHP 7.4 or newer; tested on PHP 7.4 through 8.5.
 
 ## Support
 
