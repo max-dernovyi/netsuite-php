@@ -13,12 +13,9 @@ use NetSuite\Classes\CustomRecordRef;
 use NetSuite\Classes\GetRequest;
 use NetSuite\Classes\GetResponse;
 use NetSuite\Classes\ReadResponse;
-use NetSuite\Classes\Record;
 use NetSuite\Classes\RecordRef;
-use NetSuite\Classes\StatusDetailCodeType;
 use NetSuite\Rest\Exception\NotSupportedOnRestException;
 use NetSuite\Rest\Exception\RestError;
-use NetSuite\Rest\Exception\RestErrorDetail;
 use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Mapping\RecordHydrator;
 use NetSuite\Rest\Mapping\TypeMap;
@@ -33,8 +30,8 @@ final class GetHandler implements OperationHandlerInterface
 {
     /** @var RecordClient */
     private $records;
-    /** @var RecordTypeResolver */
-    private $types;
+    /** @var RecordRefs */
+    private $refs;
     /** @var RecordHydrator */
     private $hydrator;
     /** @var ResponseBuilder */
@@ -47,7 +44,7 @@ final class GetHandler implements OperationHandlerInterface
         ?ResponseBuilder $responses = null
     ) {
         $this->records = $records;
-        $this->types = $types ?: new RecordTypeResolver();
+        $this->refs = new RecordRefs($types);
         $this->hydrator = $hydrator ?: new RecordHydrator();
         $this->responses = $responses ?: new ResponseBuilder();
     }
@@ -70,8 +67,8 @@ final class GetHandler implements OperationHandlerInterface
     public function read($ref): ReadResponse
     {
         try {
-            $type = $this->type($ref);
-            $data = $this->records->get($type, $this->id($ref));
+            $type = $this->refs->refType($ref, 'get');
+            $data = $this->records->get($type, $this->refs->id($ref));
         } catch (RestError $error) {
             return $this->responses->readFailure($error);
         }
@@ -84,51 +81,5 @@ final class GetHandler implements OperationHandlerInterface
             $record->recType->internalId = (string) $ref->typeId;
         }
         return $this->responses->readSuccess($record);
-    }
-
-    /**
-     * @throws RestError for a reference SOAP would reject
-     */
-    private function type($ref): string
-    {
-        if (!$ref instanceof RecordRef && !$ref instanceof CustomRecordRef) {
-            throw $this->invalid(
-                'get needs a RecordRef or CustomRecordRef, got '.(is_object($ref) ? get_class($ref) : gettype($ref)),
-                StatusDetailCodeType::INVALID_KEY_OR_REF
-            );
-        }
-        try {
-            $type = $this->types->resolve($ref);
-        } catch (\InvalidArgumentException $e) {
-            throw $this->invalid($e->getMessage(), StatusDetailCodeType::INVALID_RCRD_TYPE);
-        }
-        if ($ref instanceof RecordRef && !$this->isRecordClass(TypeMap::CLASS_PREFIX.ucfirst($type))) {
-            throw $this->invalid('Record type "'.$type.'" cannot be read', StatusDetailCodeType::INVALID_RCRD_TYPE);
-        }
-        return $type;
-    }
-
-    /**
-     * @param RecordRef|CustomRecordRef $ref
-     */
-    private function id($ref): string
-    {
-        if ($ref->internalId !== null && $ref->internalId !== '') {
-            return (string) $ref->internalId;
-        }
-        if ($ref->externalId !== null && $ref->externalId !== '') {
-            return RecordClient::externalId((string) $ref->externalId);
-        }
-        throw $this->invalid('The reference has neither internalId nor externalId', StatusDetailCodeType::INVALID_KEY_OR_REF);
-    }
-
-    private function isRecordClass(string $class): bool
-    {
-        return class_exists($class) && is_subclass_of($class, Record::class);
-    }
-
-    private function invalid(string $message, string $code): RestError
-    {
-        return new RestError(400, 'Bad Request', [new RestErrorDetail($message, $code)]);
     }
 }

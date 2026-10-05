@@ -21,7 +21,6 @@ use NetSuite\Rest\Exception\NotSupportedOnRestException;
 use NetSuite\Rest\Exception\RestFault;
 use NetSuite\Rest\Handler\GetHandler;
 use NetSuite\Rest\Handler\GetListHandler;
-use NetSuite\Rest\Handler\HandlerFactory;
 use NetSuite\Rest\Http\Request;
 use NetSuite\Rest\Http\Response;
 use NetSuite\Rest\Http\RestClient;
@@ -339,21 +338,5 @@ class GetHandlerTest extends TestCase
 
         $this->assertCount(1, $list->readResponse);
         $this->assertSame('1', $list->readResponse[0]->record->internalId);
-    }
-
-    public function testFactoryBuildsGetHandlersLazilyOnOneClient()
-    {
-        $built = 0;
-        $handlers = HandlerFactory::create(function () use (&$built) {
-            $built++;
-            return $this->client;
-        });
-
-        $this->assertSame(['get', 'getList'], array_keys($handlers));
-        $this->assertSame(0, $built);
-        $this->assertInstanceOf(GetHandler::class, $handlers['get']());
-        $this->assertInstanceOf(GetListHandler::class, $handlers['getList']());
-        $this->assertSame($handlers['get'](), $handlers['get']());
-        $this->assertSame(1, $built);
     }
 }

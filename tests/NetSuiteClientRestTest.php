@@ -267,7 +267,9 @@ class NetSuiteClientRestTest extends TestCase
 
     public function testDefaultHandlersSendEveryOtherOperationToTheFallback()
     {
-        $restOperations = ['get', 'getList'];
+        $restOperations = [
+            'get', 'getList', 'add', 'addList', 'update', 'updateList', 'upsert', 'upsertList', 'delete', 'deleteList',
+        ];
         $fallbacks = array_values(array_diff(OperationCatalogTest::serviceOperations(), $restOperations));
         $soap = $this->soap();
         $soap->expects($this->exactly(count($fallbacks)))->method('__soapCall')->willReturn('soap');

@@ -338,7 +338,7 @@ class NetSuiteClient
      */
     protected function createRestHandlers(callable $restClient): array
     {
-        return HandlerFactory::create($restClient);
+        return HandlerFactory::create($restClient, $this->logger);
     }
 
     protected function createRestTransport(RestConfig $config): TransportInterface

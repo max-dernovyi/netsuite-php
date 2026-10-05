@@ -30,7 +30,7 @@ final class ResponseBuilder
         $this->statuses = $statuses ?: new StatusFactory();
     }
 
-    public function recordRef(string $internalId, ?string $externalId = null, ?string $type = null): RecordRef
+    public function recordRef(?string $internalId, ?string $externalId = null, ?string $type = null): RecordRef
     {
         $ref = new RecordRef();
         $ref->internalId = $internalId;
