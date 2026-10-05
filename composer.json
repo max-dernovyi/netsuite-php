@@ -26,6 +26,9 @@
     "phpunit/phpunit": "^9.5",
     "mikey179/vfsstream": "^1.6"
   },
+  "replace": {
+    "ryanwinchester/netsuite-php": "2025.2.*"
+  },
   "suggest": {
     "vlucas/phpdotenv": "Provides loading a .env file for obtaining config variables",
     "symfony/dotenv": "Provides loading a .env file for obtaining config variables"
