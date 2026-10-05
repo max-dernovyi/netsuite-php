@@ -18,6 +18,7 @@ use NetSuite\Classes\Preferences;
 use NetSuite\Classes\SearchPreferences;
 use NetSuite\Classes\TokenPassport;
 use NetSuite\Classes\TokenPassportSignature;
+use NetSuite\Rest\Config\RestConfig;
 use Psr\Log\LoggerInterface;
 use SoapClient;
 use SoapHeader;
@@ -119,7 +120,12 @@ class NetSuiteClient
             'NETSUITE_CONSUMER_SECRET' => 'consumerSecret',
             'NETSUITE_TOKEN_KEY'       => 'token',
             'NETSUITE_TOKEN_SECRET'    => 'tokenSecret',
-            'NETSUITE_HASH_TYPE'       => 'signatureAlgorithm'
+            'NETSUITE_HASH_TYPE'       => 'signatureAlgorithm',
+            'NETSUITE_TRANSPORT'             => 'transport',
+            'NETSUITE_OAUTH2_CLIENT_ID'      => 'oauth2ClientId',
+            'NETSUITE_OAUTH2_CERTIFICATE_ID' => 'oauth2CertificateId',
+            'NETSUITE_OAUTH2_PRIVATE_KEY'    => 'oauth2PrivateKey',
+            'NETSUITE_OAUTH2_ALGORITHM'      => 'oauth2Algorithm',
         ];
         foreach ($optKeys as $optKey => $cfgKey) {
             if ($optVal = getenv($optKey)) {
@@ -140,6 +146,11 @@ class NetSuiteClient
      */
     public function validateConfig(array $config)
     {
+        if (RestConfig::transportOf($config) === RestConfig::TRANSPORT_REST) {
+            RestConfig::fromArray($config);
+            return;
+        }
+
         $requiredParams = [
             'endpoint',
             'host',
