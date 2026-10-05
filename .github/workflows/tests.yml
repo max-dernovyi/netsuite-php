@@ -26,6 +26,9 @@ jobs:
           extensions: soap, simplexml, openssl
           coverage: none
 
+      - name: Lint
+        run: docker/lint.sh src/Rest src/NetSuiteClient.php tests
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
