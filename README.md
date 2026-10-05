@@ -1,7 +1,9 @@
 # NetSuite PHP API Client
 
- [![License](https://img.shields.io/packagist/l/ryanwinchester/netsuite-php.svg?style=flat-square)](https://packagist.org/packages/ryanwinchester/netsuite-php)
-  [![Packagist](https://img.shields.io/packagist/dt/ryanwinchester/netsuite-php.svg?maxAge=2592000)]()
+ [![License](https://img.shields.io/packagist/l/max-dernovyi/netsuite-php.svg?style=flat-square)](https://packagist.org/packages/max-dernovyi/netsuite-php)
+  [![Packagist](https://img.shields.io/packagist/dt/max-dernovyi/netsuite-php.svg?maxAge=2592000)](https://packagist.org/packages/max-dernovyi/netsuite-php)
+
+Maintained fork of [netsuitephp/netsuite-php](https://github.com/netsuitephp/netsuite-php).
 
 A PHP API client package for NetSuite, pried from the
 [NetSuite PHP Toolkit](http://www.netsuite.com/portal/developers/resources/suitetalk-sample-applications.shtml)
@@ -31,7 +33,7 @@ simplified client wrapper class (`NetSuiteService`).
 Require with composer:
 
 ```
-composer require ryanwinchester/netsuite-php
+composer require max-dernovyi/netsuite-php
 ```
 
 ## Quickstart:
