@@ -8,6 +8,7 @@
  * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache-2.0
  * @link       https://github.com/netsuitephp/netsuite-php
  * created:    2015-01-22  1:04 PM
+ * modified:   2026-10-05 by Max Dernovyi: REST transport routing
  */
 
 namespace NetSuite;
@@ -18,13 +19,25 @@ use NetSuite\Classes\Preferences;
 use NetSuite\Classes\SearchPreferences;
 use NetSuite\Classes\TokenPassport;
 use NetSuite\Classes\TokenPassportSignature;
+use NetSuite\Rest\Auth\OAuth2Authenticator;
+use NetSuite\Rest\Auth\TbaAuthenticator;
 use NetSuite\Rest\Config\RestConfig;
+use NetSuite\Rest\Dispatcher;
+use NetSuite\Rest\Handler\HandlerFactory;
+use NetSuite\Rest\Http\CallRecorder;
+use NetSuite\Rest\Http\CurlTransport;
+use NetSuite\Rest\Http\RestClient;
+use NetSuite\Rest\Http\TransportInterface;
+use NetSuite\Rest\LastCall;
 use Psr\Log\LoggerInterface;
 use SoapClient;
 use SoapHeader;
 
 class NetSuiteClient
 {
+    /** WSDL version used by the SOAP fallback when a rest config has no `endpoint`. */
+    private const DEFAULT_ENDPOINT = '2025_2';
+
     /**
      * @var array
      */
@@ -45,6 +58,26 @@ class NetSuiteClient
      * @var \Psr\Log\LoggerInterface
      */
     private $logger;
+    /**
+     * @var RestConfig|null null in soap mode
+     */
+    private $restConfig;
+    /**
+     * @var Dispatcher|null
+     */
+    private $dispatcher;
+    /**
+     * @var RestClient|null
+     */
+    private $restClient;
+    /**
+     * @var LastCall|null
+     */
+    private $lastCall;
+    /**
+     * @var bool
+     */
+    private $inSoapFallback = false;
 
     /**
      * @param array|null $config
@@ -62,6 +95,17 @@ class NetSuiteClient
 
         $this->validateConfig($this->config);
         $this->clientOptions = $options;
+
+        if (RestConfig::transportOf($this->config) === RestConfig::TRANSPORT_REST) {
+            $this->restConfig = RestConfig::fromArray($this->config);
+            // The SOAP fallback needs these; rest configs may omit them.
+            if (empty($this->config['endpoint'])) {
+                $this->config['endpoint'] = self::DEFAULT_ENDPOINT;
+            }
+            if (empty($this->config['host'])) {
+                $this->config['host'] = 'https://'.$this->restConfig->host().'.suitetalk.api.netsuite.com';
+            }
+        }
 
         if (isset($client)) {
             $this->client = $client;
@@ -88,7 +132,7 @@ class NetSuiteClient
         $result = $this->getDataCenterUrls($params)->getDataCenterUrlsResult;
         $domain = $result->dataCenterUrls->webservicesDomain;
         $dataCenterUrl = $domain.'/services/NetSuitePort_'.$config['endpoint'];
-        $this->getClient()->__setLocation($dataCenterUrl);
+        $this->soapClient()->__setLocation($dataCenterUrl);
     }
 
     /**
@@ -193,7 +237,7 @@ class NetSuiteClient
     }
 
     /**
-     * Make the SOAP call!
+     * Make the SOAP call, or the REST call in rest mode.
      *
      * @param string $operation
      * @param mixed $parameter
@@ -201,17 +245,105 @@ class NetSuiteClient
      */
     protected function makeSoapCall($operation, $parameter)
     {
+        if ($this->restConfig === null || $this->inSoapFallback) {
+            return $this->callSoap($operation, $parameter);
+        }
+
+        $soapHeaders = array_keys(array_diff_key($this->soapHeaders, ['tokenPassport' => true]));
+        return $this->getDispatcher()->dispatch($operation, $parameter, $soapHeaders);
+    }
+
+    /**
+     * Make the SOAP call!
+     *
+     * @param string $operation
+     * @param mixed $parameter
+     * @return mixed
+     */
+    private function callSoap($operation, $parameter)
+    {
         $this->fixWtfCookieBug();
         $this->addHeader('tokenPassport', $this->createTokenPassportFromConfig($this->config));
 
         try {
-            $response = $this->getClient()->__soapCall($operation, [$parameter], null, $this->soapHeaders);
+            $response = $this->soapClient()->__soapCall($operation, [$parameter], null, $this->soapHeaders);
             $this->logSoapCall($operation);
             return $response;
         } catch (\Exception $e) {
             $this->logSoapCall($operation);
             throw $e;
         }
+    }
+
+    private function getDispatcher(): Dispatcher
+    {
+        if ($this->dispatcher === null) {
+            $fallback = null;
+            if ($this->restConfig->hasTbaKeys()) {
+                $fallback = function ($operation, $parameter) {
+                    $this->inSoapFallback = true;
+                    try {
+                        return $this->callSoap($operation, $parameter);
+                    } finally {
+                        $this->inSoapFallback = false;
+                    }
+                };
+            }
+            $restClient = function () {
+                return $this->getRestClient();
+            };
+            $this->dispatcher = new Dispatcher(
+                $this->createRestHandlers($restClient),
+                $fallback,
+                $this->getLastCall(),
+                $this->logger
+            );
+        }
+        return $this->dispatcher;
+    }
+
+    private function getRestClient(): RestClient
+    {
+        if ($this->restClient === null) {
+            $transport = $this->createRestTransport($this->restConfig);
+            $auth = $this->restConfig->authType() === RestConfig::AUTH_OAUTH2
+                ? OAuth2Authenticator::fromConfig($this->restConfig, $transport)
+                : TbaAuthenticator::fromConfig($this->restConfig);
+            $this->restClient = new RestClient(
+                $this->restConfig,
+                $transport,
+                $auth,
+                $this->logger,
+                null,
+                $this->getLastCall()->getRecorder()
+            );
+            $this->restClient->setLogging(!empty($this->config['logging']));
+        }
+        return $this->restClient;
+    }
+
+    private function getLastCall(): LastCall
+    {
+        if ($this->lastCall === null) {
+            $this->lastCall = new LastCall(new CallRecorder(), function () {
+                return $this->client;
+            });
+        }
+        return $this->lastCall;
+    }
+
+    /**
+     * @param callable(): RestClient $restClient
+     * @return array<string, callable> operation => lazy REST handler
+     */
+    protected function createRestHandlers(callable $restClient): array
+    {
+        return HandlerFactory::create($restClient);
+    }
+
+    protected function createRestTransport(RestConfig $config): TransportInterface
+    {
+        return new CurlTransport($config->timeout());
     }
 
     /**
@@ -374,16 +506,39 @@ class NetSuiteClient
      */
     private function fixWtfCookieBug()
     {
-        $this->getClient()->__setCookie('JSESSIONID');
+        $this->soapClient()->__setCookie('JSESSIONID');
     }
 
     /**
-     * Get the current soap client.
+     * Get the current soap client; in rest mode, the last-call object with the same __getLast*() accessors.
+     *
+     * @return \SoapClient|LastCall
+     * @throws \SoapFault
+     */
+    public function getClient()
+    {
+        if ($this->restConfig !== null) {
+            return $this->getLastCall();
+        }
+        return $this->getSoapClient();
+    }
+
+    /**
+     * The client for SOAP calls; soap mode keeps going through getClient(), as upstream does.
      *
      * @return \SoapClient
      * @throws \SoapFault
      */
-    public function getClient()
+    private function soapClient()
+    {
+        return $this->restConfig === null ? $this->getClient() : $this->getSoapClient();
+    }
+
+    /**
+     * @return \SoapClient
+     * @throws \SoapFault
+     */
+    private function getSoapClient()
     {
         if (!isset($this->client)) {
             $options = $this->createOptions($this->config, $this->clientOptions);
@@ -407,6 +562,10 @@ class NetSuiteClient
     public function logRequests($on = true)
     {
         $this->config['logging'] = $on;
+
+        if ($this->restClient !== null) {
+            $this->restClient->setLogging((bool) $on);
+        }
     }
 
     /**
@@ -432,12 +591,12 @@ class NetSuiteClient
     {
         if (isset($this->config['logging']) && $this->config['logging']) {
             $this->logger->info(
-                Logger::getSoapCallRequestMessage($this->getClient()) ?? '',
+                Logger::getSoapCallRequestMessage($this->soapClient()) ?? '',
                 ['operation' => $operation, 'type' => Logger::TYPE_REQUEST]
             );
 
             $this->logger->info(
-                Logger::getSoapCallResponseMessage($this->getClient()) ?? '',
+                Logger::getSoapCallResponseMessage($this->soapClient()) ?? '',
                 ['operation' => $operation, 'type' => Logger::TYPE_RESPONSE]
             );
         }
