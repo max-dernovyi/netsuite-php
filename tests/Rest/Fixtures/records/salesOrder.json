@@ -1,0 +1,50 @@
+{
+  "links": [{"rel": "self", "href": "https://123456.suitetalk.api.netsuite.com/services/rest/record/v1/salesOrder/5012"}],
+  "currency": {"links": [], "id": "1", "refName": "USA"},
+  "custbody_channel": {"links": [], "id": "4", "refName": "Web"},
+  "email": "billing@acme.example",
+  "entity": {"links": [], "id": "107", "refName": "Acme Inc."},
+  "id": "5012",
+  "item": {
+    "links": [],
+    "items": [
+      {
+        "links": [],
+        "amount": 200.0,
+        "custcol_gift": false,
+        "description": "Widget",
+        "isClosed": false,
+        "item": {"links": [], "id": "11", "refName": "WIDGET"},
+        "line": 1,
+        "price": {"links": [], "id": "1", "refName": "Base Price"},
+        "quantity": 2,
+        "rate": 100
+      },
+      {
+        "links": [],
+        "amount": 45.75,
+        "description": "Gadget",
+        "isClosed": false,
+        "item": {"links": [], "id": "12", "refName": "GADGET"},
+        "line": 2,
+        "quantity": 1.5,
+        "rate": 30.5
+      }
+    ],
+    "totalResults": 2
+  },
+  "memo": "Rush order",
+  "orderStatus": {"id": "B", "refName": "Pending Fulfillment"},
+  "shippingAddress": {
+    "links": [],
+    "addr1": "2955 Campus Drive",
+    "city": "San Mateo",
+    "country": {"id": "US", "refName": "United States"},
+    "state": "CA",
+    "zip": "94403"
+  },
+  "status": {"id": "Pending Fulfillment", "refName": "Pending Fulfillment"},
+  "total": 245.75,
+  "tranDate": "2026-10-05",
+  "tranId": "SO1042"
+}

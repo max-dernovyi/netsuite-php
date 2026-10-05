@@ -1,9 +1,11 @@
 <?php
+// modified: 2026-10-05 by Max Dernovyi: skip debug messages
 
 namespace NetSuite;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
+use Psr\Log\LogLevel;
 
 class Logger implements LoggerInterface
 {
@@ -46,6 +48,10 @@ class Logger implements LoggerInterface
 
     public function log($level, $message, array $context = []): void
     {
+        // Every message becomes a file; REST debug notes would add one per call.
+        if ($level === LogLevel::DEBUG) {
+            return;
+        }
         $this->writeMessage($message, $context);
     }
 

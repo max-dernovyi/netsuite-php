@@ -1,4 +1,5 @@
 <?php
+// modified: 2026-10-05 by Max Dernovyi: REST config tests
 
 namespace tests\Netsuite;
 
@@ -73,7 +74,9 @@ class NetSuiteClientTest extends TestCase
             'NETSUITE_LOG_FORMAT', 'NETSUITE_LOG_DATEFORMAT',
             'NETSUITE_CONSUMER_KEY', 'NETSUITE_CONSUMER_SECRET',
             'NETSUITE_TOKEN_KEY', 'NETSUITE_TOKEN_SECRET',
-            'NETSUITE_HASH_TYPE',
+            'NETSUITE_HASH_TYPE', 'NETSUITE_TRANSPORT',
+            'NETSUITE_OAUTH2_CLIENT_ID', 'NETSUITE_OAUTH2_CERTIFICATE_ID',
+            'NETSUITE_OAUTH2_PRIVATE_KEY', 'NETSUITE_OAUTH2_ALGORITHM',
         ];
         $original = [];
         foreach ($envVars as $var) {
@@ -91,6 +94,9 @@ class NetSuiteClientTest extends TestCase
             $this->assertArrayNotHasKey('consumerSecret', $config);
             $this->assertArrayNotHasKey('token', $config);
             $this->assertArrayNotHasKey('tokenSecret', $config);
+            foreach (['transport', 'oauth2ClientId', 'oauth2CertificateId', 'oauth2PrivateKey', 'oauth2Algorithm'] as $key) {
+                $this->assertArrayNotHasKey($key, $config);
+            }
         } finally {
             foreach ($original as $var => $val) {
                 if ($val !== false) {
@@ -136,6 +142,178 @@ class NetSuiteClientTest extends TestCase
                 }
             }
         }
+    }
+
+    /**
+     * @param array<string, string|null> $vars
+     */
+    private function withEnv(array $vars, callable $fn)
+    {
+        $original = [];
+        foreach ($vars as $var => $val) {
+            $original[$var] = getenv($var);
+            putenv($val === null ? $var : "$var=$val");
+        }
+
+        try {
+            return $fn();
+        } finally {
+            foreach ($original as $var => $val) {
+                putenv($val === false ? $var : "$var=$val");
+            }
+        }
+    }
+
+    public function testGetEnvConfigReadsRestVars()
+    {
+        $config = $this->withEnv([
+            'NETSUITE_TRANSPORT'             => 'rest',
+            'NETSUITE_OAUTH2_CLIENT_ID'      => 'client-id',
+            'NETSUITE_OAUTH2_CERTIFICATE_ID' => 'cert-id',
+            'NETSUITE_OAUTH2_PRIVATE_KEY'    => '/keys/netsuite.pem',
+            'NETSUITE_OAUTH2_ALGORITHM'      => 'ES256',
+        ], [NetSuiteClient::class, 'getEnvConfig']);
+
+        $this->assertEquals('rest', $config['transport']);
+        $this->assertEquals('client-id', $config['oauth2ClientId']);
+        $this->assertEquals('cert-id', $config['oauth2CertificateId']);
+        $this->assertEquals('/keys/netsuite.pem', $config['oauth2PrivateKey']);
+        $this->assertEquals('ES256', $config['oauth2Algorithm']);
+    }
+
+    public function testEnvRestConfigDerivesTheFallbackHostFromTheAccount()
+    {
+        $config = $this->withEnv([
+            'NETSUITE_TRANSPORT'       => 'rest',
+            'NETSUITE_HOST'            => null,
+            'NETSUITE_ACCOUNT'         => '123456_SB1',
+            'NETSUITE_CONSUMER_KEY'    => 'ck-123',
+            'NETSUITE_CONSUMER_SECRET' => 'cs-456',
+            'NETSUITE_TOKEN_KEY'       => 'tk-789',
+            'NETSUITE_TOKEN_SECRET'    => 'ts-012',
+        ], [NetSuiteClient::class, 'getEnvConfig']);
+
+        $this->assertSame('', $config['host']);
+        $client = new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $property = new \ReflectionProperty(NetSuiteClient::class, 'config');
+        $property->setAccessible(true);
+        $this->assertSame('https://123456-sb1.suitetalk.api.netsuite.com', $property->getValue($client)['host']);
+    }
+
+    /**
+     * @dataProvider transportProvider
+     */
+    public function testEnvTbaConfigValidatesInBothModes(string $transport)
+    {
+        $config = $this->withEnv([
+            'NETSUITE_TRANSPORT'       => $transport,
+            'NETSUITE_ACCOUNT'         => '123456_SB1',
+            'NETSUITE_CONSUMER_KEY'    => 'ck-123',
+            'NETSUITE_CONSUMER_SECRET' => 'cs-456',
+            'NETSUITE_TOKEN_KEY'       => 'tk-789',
+            'NETSUITE_TOKEN_SECRET'    => 'ts-012',
+            'NETSUITE_OAUTH2_CLIENT_ID'      => null,
+            'NETSUITE_OAUTH2_CERTIFICATE_ID' => null,
+            'NETSUITE_OAUTH2_PRIVATE_KEY'    => null,
+        ], [NetSuiteClient::class, 'getEnvConfig']);
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $this->assertSame($transport, $config['transport']);
+    }
+
+    /**
+     * @dataProvider transportProvider
+     */
+    public function testExistingTbaConfigValidatesInBothModes(string $transport)
+    {
+        $config = $this->validConfig();
+        $config['transport'] = $transport;
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $this->assertTrue(true);
+    }
+
+    public static function transportProvider(): array
+    {
+        return [
+            'soap' => ['soap'],
+            'rest' => ['rest'],
+        ];
+    }
+
+    public function testRestModeDoesNotRequireEndpointAndHost()
+    {
+        $config = $this->validConfig();
+        unset($config['endpoint'], $config['host']);
+        $config['transport'] = 'rest';
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $this->assertTrue(true);
+    }
+
+    public function testRestModeAcceptsOAuth2OnlyConfig()
+    {
+        $config = [
+            'transport'           => 'rest',
+            'account'             => '123456',
+            'oauth2ClientId'      => 'client-id',
+            'oauth2CertificateId' => 'cert-id',
+            'oauth2PrivateKey'    => '/keys/netsuite.pem',
+        ];
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+        $this->assertTrue(true);
+    }
+
+    /**
+     * @dataProvider restMissingKeyProvider
+     */
+    public function testRestModeThrowsOnMissingKey(string $missingKey)
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Config key missing: ' . $missingKey);
+
+        $config = $this->validConfig();
+        $config['transport'] = 'rest';
+        unset($config[$missingKey]);
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+    }
+
+    public static function restMissingKeyProvider(): array
+    {
+        return [
+            'account'        => ['account'],
+            'token'          => ['token'],
+            'tokenSecret'    => ['tokenSecret'],
+            'consumerKey'    => ['consumerKey'],
+            'consumerSecret' => ['consumerSecret'],
+        ];
+    }
+
+    public function testSoapModeStillRequiresTbaKeysWithOAuth2Keys()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Config key missing: token');
+
+        $config = $this->validConfig();
+        unset($config['token']);
+        $config['oauth2ClientId'] = 'client-id';
+        $config['oauth2CertificateId'] = 'cert-id';
+        $config['oauth2PrivateKey'] = '/keys/netsuite.pem';
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
+    }
+
+    public function testInvalidTransportThrows()
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Config key invalid: transport');
+
+        $config = $this->validConfig();
+        $config['transport'] = 'http';
+
+        new NetSuiteClient($config, [], $this->createMock(\SoapClient::class));
     }
 
     public function testAddAndClearHeader()

@@ -1,4 +1,5 @@
 <?php
+// modified: 2026-10-05 by Max Dernovyi: debug level test
 
 namespace tests\Netsuite;
 
@@ -61,6 +62,16 @@ class LoggerTest extends TestCase
         $logger->logSoapCall($this->getSoapClient(), 'upsert');
         $this->assertFileExists($this->root->url() . '/file-request.xml');
         $this->assertFileExists($this->root->url() . '/file-response.xml');
+    }
+
+    public function testSkipsDebugMessages()
+    {
+        $logger = new Logger($this->root->url(), 'file');
+        $logger->debug('note', ['operation' => 'get']);
+        $this->assertFileDoesNotExist($this->root->url() . '/file.xml');
+
+        $logger->warning('fallback', ['operation' => 'search']);
+        $this->assertSame('fallback' . PHP_EOL, file_get_contents($this->root->url() . '/file.xml'));
     }
 
 

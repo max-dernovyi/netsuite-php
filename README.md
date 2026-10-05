@@ -1,198 +1,162 @@
-# NetSuite PHP API Client
+# NetSuite PHP
 
- [![License](https://img.shields.io/packagist/l/max-dernovyi/netsuite-php.svg?style=flat-square)](https://packagist.org/packages/max-dernovyi/netsuite-php)
-  [![Packagist](https://img.shields.io/packagist/dt/max-dernovyi/netsuite-php.svg?maxAge=2592000)](https://packagist.org/packages/max-dernovyi/netsuite-php)
+[![Tests](https://github.com/max-dernovyi/netsuite-php/actions/workflows/tests.yml/badge.svg)](https://github.com/max-dernovyi/netsuite-php/actions/workflows/tests.yml)
+[![Packagist](https://img.shields.io/packagist/v/max-dernovyi/netsuite-php)](https://packagist.org/packages/max-dernovyi/netsuite-php)
+[![PHP](https://img.shields.io/packagist/dependency-v/max-dernovyi/netsuite-php/php)](https://packagist.org/packages/max-dernovyi/netsuite-php)
+[![License](https://img.shields.io/packagist/l/max-dernovyi/netsuite-php)](#license)
 
-Maintained fork of [netsuitephp/netsuite-php](https://github.com/netsuitephp/netsuite-php).
-
-A PHP API client package for NetSuite, pried from the
-[NetSuite PHP Toolkit](http://www.netsuite.com/portal/developers/resources/suitetalk-sample-applications.shtml)
-and made more consumable for modern PHP application development. All of the
-classes in the `NetSuite\Classes` namespace are code provided by NetSuite
-with a [license](#license) allowing redistribution. The custom work provided
-by this library separates these nearly 2,000 classes out into their own files
-and allows the classes to be installed with composer and accessed using
-standard autoloading support. It allows configuration to be read from the
-environment, adds support to log requests and responses and provides a
-simplified client wrapper class (`NetSuiteService`).
-
-* [Installation](#installation)
-* [Quickstart](#quickstart)
-  * [w/Laravel](#laravel-integration)
-* [Account-Specific Data Center URLs](#Account-Specific-Data-Center-URLs)
-* [Examples](#examples)
-* [Logging](#logging)
-* [Generating Classes](#generating-classes)
-* [Roadmap](#roadmap)
-* [Support](#support)
-* [Contributing](#contributing)
-* [License](#license)
+PHP client for NetSuite SuiteTalk web services. Maintained fork of
+[netsuitephp/netsuite-php](https://github.com/netsuitephp/netsuite-php) with the same
+API and generated `NetSuite\Classes`, PHP 7.4+ support, and an optional REST transport
+for the retirement of SOAP web services.
 
 ## Installation
-
-Require with composer:
 
 ```
 composer require max-dernovyi/netsuite-php
 ```
 
-## Quickstart:
+Requires PHP 7.4+ with the `soap`, `simplexml`, `openssl`, `curl` and `json` extensions.
 
-#### Instantiating the NetSuiteService class:
+**Migrating from `ryanwinchester/netsuite-php`:** swap the package in `composer.json`;
+namespaces, classes and config stay the same. This package replaces
+`ryanwinchester/netsuite-php` 2025.2, so wrappers that require it, such as
+[netsuite-laravel](https://github.com/netsuitephp/netsuite-laravel), install against it.
 
-Any of the examples herein will assume you have already instantiated a client
-object using token-based authentication. The method of authenticating with
-user credentials was dropped from support by NetSuite in 2020.
+## Quickstart
 
 ```php
-// Token-based Authentication
-require 'vendor/autoload.php';
-
 use NetSuite\NetSuiteService;
+use NetSuite\Classes\GetRequest;
+use NetSuite\Classes\RecordRef;
 
-$config = [
-    // required -------------------------------------
-    "endpoint"       => "2021_1",
-    "host"           => "https://webservices.netsuite.com",
-    "account"        => "MYACCT1",
-    "consumerKey"    => "0123456789ABCDEF",
-    "consumerSecret" => "0123456789ABCDEF",
-    "token"          => "0123456789ABCDEF",
-    "tokenSecret"    => "0123456789ABCDEF",
-    // optional -------------------------------------
-    "signatureAlgorithm" => 'sha256', // Defaults to 'sha256'
-    "logging"  => true,
-    "log_path" => "/var/www/myapp/logs/netsuite",
-    "log_format"     => "netsuite-php-%date-%operation",
-    "log_dateformat" => "Ymd.His.u",
-];
-$service = new NetSuiteService($config);
+$service = new NetSuiteService([
+    'endpoint'       => '2025_2',
+    'host'           => 'https://123456.suitetalk.api.netsuite.com',
+    'account'        => '123456',
+    'consumerKey'    => '...',
+    'consumerSecret' => '...',
+    'token'          => '...',
+    'tokenSecret'    => '...',
+]);
+
+$request = new GetRequest();
+$request->baseRef = new RecordRef();
+$request->baseRef->type = 'customer';
+$request->baseRef->internalId = '1234';
+
+$response = $service->get($request);
+if ($response->readResponse->status->isSuccess) {
+    $customer = $response->readResponse->record;
+}
 ```
-You can alternatively place your config in environment variables. This is
-helpful in hosted environments where deployment of config files is either
-not desired or practical. You can find the valid keys in the included
-`.env.example` file with sample values.
 
-Previously, instantiating the NetSuiteClient with ENV data entailed using the
-static method `createFromEnv`. This method is now marked as `deprecated` and
-if you are using it, please change your code to use the standard constructor
-which will extract your configuration out of the $_ENV superglobal for you.
+More in [EXAMPLES.md](EXAMPLES.md): search with paging, add, upsert, custom fields,
+item fulfillment.
+
+## Configuration
+
+| Key | Required | Notes |
+|---|---|---|
+| `account` | yes | Account id: `123456`, or `123456_SB1` for a sandbox |
+| `consumerKey`, `consumerSecret`, `token`, `tokenSecret` | yes | Token-based authentication (TBA) |
+| `endpoint` | SOAP | WSDL version: `2025_2` |
+| `host` | SOAP | Account domain: `https://<account>.suitetalk.api.netsuite.com` |
+| `signatureAlgorithm` | no | `sha256` (default) |
+| `transport` | no | `soap` (default) or `rest`, see [REST transport](#rest-transport) |
+| `logging`, `log_path`, `log_format`, `log_dateformat` | no | See [Logging](#logging) |
+
+`new NetSuiteService()` without arguments reads the same settings from `NETSUITE_*`
+environment variables; see `.env.example`.
+
+With `host` set to `https://webservices.netsuite.com`, the client first looks up the
+account domain, which costs one extra request per service instance.
+
+## REST transport
+
+NetSuite is retiring SOAP web services: no new SOAP integrations from 2027.1, and all
+SOAP endpoints are disabled with 2028.2
+([Oracle FAQ](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_2104046421.html)).
+With `transport` set to `rest`, the same calls go to the NetSuite REST Record API and
+your code does not change.
 
 ```php
-// Allowing the client to infer configuration from $_ENV
-require 'vendor/autoload.php';
+$config['transport'] = 'rest';
 
-use NetSuite\NetSuiteService;
-
-$service = new NetSuiteService();
+// Optional: OAuth 2.0 client credentials instead of TBA (all three keys).
+$config['oauth2ClientId']      = '...';
+$config['oauth2CertificateId'] = '...';
+$config['oauth2PrivateKey']    = '/path/to/private.pem'; // PEM contents or a file path
+$config['oauth2Algorithm']     = 'PS256';                // or 'ES256'
 ```
 
-### Laravel Integration
+- The REST host is derived from `account`; `endpoint` and `host` are optional.
+- `timeout` (seconds, default 60) and `maxAttempts` (default 3) are optional. GET,
+  PUT and DELETE are retried; POST and PATCH are not.
+- On REST: `get`, `getList`, `add`, `update`, `upsert`, `delete`, `addList`,
+  `updateList`, `upsertList`, `deleteList`. Every other operation is sent via SOAP and
+  logs the warning `NetSuite REST: operation "<op>" is not supported, sent via SOAP`.
+  Without TBA keys there is no SOAP fallback, and
+  `NetSuite\Rest\Exception\NotSupportedOnRestException` is thrown.
 
-If you're implementing NetSuite web services in a
-[Laravel](https://laravel.com) application, you might want to look at the
-[netsuite-laravel](https://github.com/netsuitephp/netsuite-laravel) package
-to streamline instantiating and making the client available to your app
-via the service container. In that case, you'll simply need to require the
-`netsuitephp/netsuite-laravel` package in your application and then as long
-as the client configuration is present in the application's environment,
-you'll have a client instance in the container.
+Differences from SOAP:
 
-
-## Account-Specific Data Center URLs
-
-With `2021_1`, this library provides support to utilize NetSuite's new
-account-specific data center URL detection on each request. In practice, this
-lookup does have a measurable overhead cost. As such, I'd suggest using this
-feature only if your manner of NetSuite integration is such that you make
-fewer connections, handling integration in batches. If your manner of
-integration is to instead make many frequent, brief requests from NetSuite,
-then you will probably prefer to provide your data center URL explicitly and
-remove the lookup from every session.
-
-```php
-// Recommended: Use your own defined data center URL (or sandbox, for instance):
-$config['host'] = 'https://123456789.suitetalk.api.netsuite.com';
-
-// To allow the service to get the correct URL for your account on the fly,
-// use the legacy webservices url.
-$config['host'] = 'https://webservices.netsuite.com';
-```
-
-## Examples
-
-See [EXAMPLES.md](EXAMPLES.md)
+- Business errors come back as `status.isSuccess = false`, as with SOAP. Auth,
+  throttling and transport failures throw `NetSuite\Rest\Exception\RestFault`, which
+  extends `\SoapFault`.
+- List operations make one request per record. A fault on the first record is thrown;
+  a fault on a later record becomes that record's failed status.
+- `getClient()` returns an object with `__getLastRequest()`, `__getLastResponse()`,
+  `__getLastRequestHeaders()` and `__getLastResponseHeaders()` for the last call,
+  with `Authorization` redacted.
+- Preferences, search preferences, application info and custom headers apply only to
+  SOAP calls. `deletionReason` is ignored.
+- External ids may contain only letters, digits, `_` and `-`. Custom records need
+  their `customrecord_*` script id.
 
 ## Logging
 
-The most common way to enable logging will be to do so at the configuration
-level, see the [quickstart](#quickstart) examples.
-
-You can also set logging on or off during runtime with methods. Note that
-if you don't specify a logging directory in the config or at runtime, then
-no logs will be created. There must be a valid target location.
+With `logging` on and `log_path` set, each request and response is written to a file
+named by `log_format` (tokens `%date` and `%operation`) and `log_dateformat`:
 
 ```php
-// Set a logging path
-$service->setLogPath('/path/to/logs');
-
-// Turn logging on
-$service->logRequests(true);  // Turn logging on.
-
-// Turn logging off
-$service->logRequests(false); // Turn logging off.
+$service->setLogPath('/var/log/netsuite');
+$service->logRequests(true);
 ```
 
-If you require more flexibility in relation to logging, you can provide your
-own PSR-3 compatible logger (as of `2023.1.0`).
+To use your own PSR-3 logger, pass it as the fourth constructor argument:
+`new NetSuiteService($config, [], null, $logger)`. REST exchanges are logged one entry
+each, with credentials redacted; the SOAP-fallback warning goes to the same logger.
 
-## Generating Classes
+## Development
 
-This repository always contains classes generated from the version of the
-NetSuite PHP Toolkit corresponding with the web services version denoted
-by the specific release. Release `v2021.1.0`, for instance, is the first
-release built against NetSuite's `2021_1` web services toolkit. If you want
-to generate the class files yourself, for whatever reason, there is code
-included with the package to do so, using the following steps:
+Tests run in Docker, no local PHP needed (`PHP` defaults to 8.5):
 
-* Download the
-[NetSuite PHP Toolkit](http://www.netsuite.com/portal/developers/resources/suitetalk-sample-applications.shtml)
-* Unzip the contents into the `./original/` folder
-* Run `./utilities/separate_classes.php` or `composer generate`
+```
+make test PHP=7.4    # PHPUnit and phpspec
+make lint PHP=7.4
+make coverage
+```
 
-## Roadmap
+CI runs the suite on PHP 7.4–8.5. The `parity` group compares SOAP and REST responses
+on a real account and is skipped unless `NETSUITE_PARITY_ACCOUNT` and the TBA env keys
+are set; see `tests/Parity/`.
 
-#### PHP Version Support
-
-Requires PHP 7.4 or newer; tested on PHP 7.4 through 8.5.
-
-## Support
-
-If you need help with implementation, see the
-[resources section](EXAMPLES.md#resources) of the examples file for some
-useful links.
-
-If you believe that your issue is a bug specific to the custom work provided
-by this package (and not NetSuite's own classes that are packaged therein),
-then you can file an issue in github. Per the issue template, please include
-a clear description of the problem, how it is reproduced and the logs of
-relevant requests/responses using the logging features of this package.
+`NetSuite\Classes` and `NetSuiteService` are generated from the NetSuite PHP Toolkit
+(`composer generate`, see `utilities/`). 2025.2 is NetSuite's last planned SOAP
+endpoint.
 
 ## Contributing
 
-Contributions are welcome in the form of pull requests. Please include a clear
-explanation of the reason for the change and try to keep changes as small as
-possible, which will increase the speed with which we can get them reviewed
-and the likelihood of being included into the master branch.
-
-* Make sure to respect the current required `php` version in `composer.json`
-* Avoid introducing new dependencies (no framework hooks, etc)
-* Please try to make all additions comply with
-[PSR-12](https://www.php-fig.org/psr/psr-12/)
-
+Issues and pull requests are welcome. Keep PHP 7.4 compatibility, add no runtime
+dependencies, and follow [PSR-12](https://www.php-fig.org/psr/psr-12/).
 
 ## License
 
-[Original work](http://www.netsuite.com/portal/developers/resources/suitetalk-sample-applications.shtml) is Copyright &copy; 2010-2015 NetSuite Inc. and provided "as is." Refer to the [NetSuite Toolkit License Agreement](original/NetSuite%20Application%20Developer%20License%20Agreement.txt) file.
+The generated code (`NetSuite\Classes`, `NetSuiteService`) comes from the NetSuite PHP
+Toolkit, © NetSuite Inc., under the
+[NetSuite Application Developer License Agreement](original/NetSuite%20Application%20Developer%20License%20Agreement.txt).
+Everything else is [Apache-2.0](LICENSE.txt).
 
-All additional work is licensed under the **Apache 2.0** open source software license according to the included [LICENSE](LICENSE.txt) file.
+NetSuite is a trademark of Oracle. This project is not affiliated with or endorsed by
+Oracle.

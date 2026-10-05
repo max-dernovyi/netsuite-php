@@ -18,6 +18,8 @@
     "php": ">=7.4",
     "ext-soap": "*",
     "ext-SimpleXML": "*",
+    "ext-curl": "*",
+    "ext-json": "*",
     "ext-openssl": "*",
     "psr/log": "^1|^2|^3"
   },

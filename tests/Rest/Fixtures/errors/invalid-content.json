@@ -1,0 +1,17 @@
+{
+  "type": "https://www.rfc-editor.org/rfc/rfc9110.html#section-15.5.1",
+  "title": "Bad Request",
+  "status": 400,
+  "o:errorDetails": [
+    {
+      "detail": "Error while accessing a resource. You have entered an Invalid Field Value 999 for the following field: subsidiary",
+      "o:errorPath": "subsidiary",
+      "o:errorCode": "INVALID_CONTENT"
+    },
+    {
+      "detail": "Please enter value(s) for: Company Name",
+      "o:errorPath": "companyName",
+      "o:errorCode": "USER_ERROR"
+    }
+  ]
+}
