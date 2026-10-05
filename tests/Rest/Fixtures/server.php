@@ -1,4 +1,10 @@
 <?php
+/**
+ * This file is part of the max-dernovyi/netsuite-php library.
+ *
+ * @copyright  Copyright (c) Max Dernovyi
+ * @license    http://www.apache.org/licenses/LICENSE-2.0 Apache-2.0
+ */
 // Router for PHP's built-in web server, used by CurlTransportTest.
 
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);

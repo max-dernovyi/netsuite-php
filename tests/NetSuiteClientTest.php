@@ -1,4 +1,5 @@
 <?php
+// modified: 2026-10-05 by Max Dernovyi: REST config tests
 
 namespace tests\Netsuite;
 
