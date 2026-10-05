@@ -1,3 +1,4 @@
+<!-- modified: 2026-10-05 by Max Dernovyi: REST transport section -->
 # NetSuite PHP API Client
 
  [![License](https://img.shields.io/packagist/l/max-dernovyi/netsuite-php.svg?style=flat-square)](https://packagist.org/packages/max-dernovyi/netsuite-php)
@@ -20,6 +21,7 @@ simplified client wrapper class (`NetSuiteService`).
 * [Quickstart](#quickstart)
   * [w/Laravel](#laravel-integration)
 * [Account-Specific Data Center URLs](#Account-Specific-Data-Center-URLs)
+* [REST Transport](#rest-transport)
 * [Examples](#examples)
 * [Logging](#logging)
 * [Generating Classes](#generating-classes)
@@ -117,6 +119,56 @@ $config['host'] = 'https://123456789.suitetalk.api.netsuite.com';
 // To allow the service to get the correct URL for your account on the fly,
 // use the legacy webservices url.
 $config['host'] = 'https://webservices.netsuite.com';
+```
+
+## REST Transport
+
+Set `transport` to `rest` to send requests to the NetSuite REST Record API
+instead of SOAP. `NetSuiteService` and the `NetSuite\Classes` objects stay the
+same. The REST host is derived from `account`.
+
+```php
+$config['transport'] = 'rest';   // "soap" (default) or "rest"; env NETSUITE_TRANSPORT
+```
+
+REST reuses the TBA keys. OAuth 2.0 client credentials are used instead when
+all three `oauth2*` keys are set (env keys are listed in `.env.example`):
+
+```php
+$config['oauth2ClientId']      = 'CLIENT_ID';
+$config['oauth2CertificateId'] = 'CERTIFICATE_ID';
+$config['oauth2PrivateKey']    = '/path/to/private.pem'; // PEM contents or a file path
+$config['oauth2Algorithm']     = 'PS256';                // "PS256" (default) or "ES256"
+// optional
+$config['timeout']     = 60;  // seconds
+$config['maxAttempts'] = 3;   // GET, PUT and DELETE are retried; POST and PATCH are not
+```
+
+Operations on REST: `get`, `getList`, `add`, `update`, `upsert`, `delete`,
+`addList`, `updateList`, `upsertList`, `deleteList`. List forms make one REST
+call per record. Every other operation is sent via SOAP and logs a PSR-3
+warning `NetSuite REST: operation "<op>" is not supported, sent via SOAP`.
+Without TBA keys the fallback is impossible and
+`NetSuite\Rest\Exception\NotSupportedOnRestException` is thrown.
+
+Differences from SOAP:
+
+* Business errors come back as `status.isSuccess = false`, as with SOAP. Auth,
+  throttling and transport failures throw `NetSuite\Rest\Exception\RestFault`,
+  which extends `\SoapFault`.
+* `getClient()` returns an object with `__getLastRequest()`,
+  `__getLastResponse()`, `__getLastRequestHeaders()` and
+  `__getLastResponseHeaders()` for the last call, REST or SOAP; no `SoapClient`
+  is created until a fallback needs one.
+* Preferences, search preferences, application info and custom headers apply
+  only to SOAP calls.
+
+Tests run in Docker (`PHP` defaults to 8.5):
+
+```
+make test PHP=7.4
+make lint PHP=7.4
+make coverage
 ```
 
 ## Examples
