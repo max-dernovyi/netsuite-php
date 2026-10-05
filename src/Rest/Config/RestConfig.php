@@ -46,6 +46,8 @@ final class RestConfig
     private $timeout;
     /** @var int */
     private $maxAttempts;
+    /** @var bool */
+    private $logging;
 
     private function __construct()
     {
@@ -88,6 +90,7 @@ final class RestConfig
 
         $self->timeout = self::positiveNumber($config, 'timeout', self::DEFAULT_TIMEOUT);
         $self->maxAttempts = (int) self::positiveNumber($config, 'maxAttempts', self::DEFAULT_MAX_ATTEMPTS, true);
+        $self->logging = !empty($config['logging']);
 
         return $self;
     }
@@ -275,5 +278,10 @@ final class RestConfig
     public function maxAttempts(): int
     {
         return $this->maxAttempts;
+    }
+
+    public function logging(): bool
+    {
+        return $this->logging;
     }
 }

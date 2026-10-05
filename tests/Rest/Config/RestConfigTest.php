@@ -284,6 +284,13 @@ class RestConfigTest extends TestCase
         $this->assertSame(5, $config->maxAttempts());
     }
 
+    public function testLogging()
+    {
+        $this->assertFalse(RestConfig::fromArray($this->tbaConfig())->logging());
+        $this->assertFalse(RestConfig::fromArray($this->tbaConfig(['logging' => false]))->logging());
+        $this->assertTrue(RestConfig::fromArray($this->tbaConfig(['logging' => true]))->logging());
+    }
+
     /**
      * @dataProvider invalidLimitProvider
      */
